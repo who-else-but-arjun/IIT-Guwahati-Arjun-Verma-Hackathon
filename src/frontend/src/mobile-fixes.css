@@ -1,0 +1,93 @@
+/* Mobile/touch corrections layered after the reference stylesheet. */
+@media (hover: none) and (pointer: coarse) {
+  .rt:hover,
+  .rt:focus-within,
+  .pt:hover,
+  .pt:focus-within {
+    animation-play-state: running;
+  }
+}
+
+@media (max-width: 760px) {
+  .run,
+  .pulse {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .rw,
+  .pulse {
+    touch-action: pan-y;
+  }
+
+  .rt,
+  .pt {
+    animation-play-state: running;
+  }
+
+  .order-table-wrap {
+    width: 100%;
+    overflow: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .order-table-wrap .orders-table {
+    min-width: 900px;
+    width: max-content;
+  }
+
+  .orders-table .order-row {
+    cursor: pointer;
+  }
+
+  .orders-table .order-row:focus-visible {
+    outline: 2px solid var(--red);
+    outline-offset: -2px;
+  }
+
+  .orders-table .order-row > td {
+    white-space: nowrap;
+  }
+
+  .dr,
+  .detail-drawer {
+    top: env(safe-area-inset-top, 0px);
+    right: 0;
+    bottom: 0;
+    width: min(620px, 100vw);
+    max-width: 100vw;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+  }
+
+  .drawer-content,
+  .drawer-content > *,
+  .drawer-content .table-scroll {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .universe-canvas-wrap {
+    min-width: 0;
+    touch-action: pan-y;
+  }
+
+  .universe-canvas {
+    touch-action: none;
+  }
+
+  .universe-overlay-toolbar {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) and (max-width: 760px) {
+  .rt,
+  .pt {
+    animation: rn 120s linear infinite !important;
+  }
+}

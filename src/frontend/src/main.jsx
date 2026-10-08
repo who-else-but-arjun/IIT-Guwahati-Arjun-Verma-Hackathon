@@ -3,5 +3,6 @@ import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import "./style.css";
 import "./reference-overrides.css";
+import "./mobile-fixes.css";
 
 createRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);

@@ -95,7 +95,7 @@ def run_portfolio_engine() -> None:
                     for portfolio in active
                 ))
                 if (now_local.time() >= close_after and checkpoint_lagging
-                        and monotonic_now - last_sync_attempt >= 900):
+                        and monotonic_now - last_sync_attempt >= 60):
                     last_sync_attempt = monotonic_now
                     for portfolio, days, orders in service.sync_saved_portfolios():
                         logger.info(

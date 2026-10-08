@@ -66,6 +66,7 @@ def get_events(request: HttpRequest) -> JsonResponse:
         until = parse_optional_time(request.GET.get("until"))
         limit = int(request.GET.get("limit", "100"))
         offset = int(request.GET.get("offset", "0"))
+        include_pending = request.GET.get("include_pending", "0").lower() in {"1", "true", "yes"}
         repository = MongoRepository()
         events = repository.get_events(
             category=request.GET.get("category"),
@@ -75,6 +76,7 @@ def get_events(request: HttpRequest) -> JsonResponse:
             until=until,
             limit=limit,
             offset=offset,
+            include_pending=include_pending,
         )
         total_count = repository.count_events(
             category=request.GET.get("category"),
@@ -82,6 +84,7 @@ def get_events(request: HttpRequest) -> JsonResponse:
             score_max=score_max,
             since=since,
             until=until,
+            include_pending=include_pending,
         )
         return JsonResponse({"count": len(events), "total_count": total_count,
                              "offset": offset, "limit": limit,

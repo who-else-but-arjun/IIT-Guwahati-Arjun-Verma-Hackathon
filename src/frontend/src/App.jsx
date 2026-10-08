@@ -24,9 +24,7 @@ export default function App() {
   const [routeTicker, setRouteTicker] = useState("");
   const [detail, setDetail] = useState(null);
   const eventsLoader = useCallback(async () => {
-    const result = await api.events({ limit: 100, offset: 0 });
-    const events = (result.events || []).filter(fullyAnalyzed);
-    return { ...result, events };
+    return api.events({ limit: 100, offset: 0, include_pending: 1 });
   }, []);
   const portfolioLoader = useCallback(async () => (await api.portfolios()).portfolios || [], []);
   const healthLoader = useCallback(async () => {
@@ -35,7 +33,7 @@ export default function App() {
   }, []);
   const graphLoader = useCallback(async () => (await api.tickers()).tickers || [], []);
   const universeLoader = useCallback(async () => (await api.tickerUniverse()).tickers || [], []);
-  const eventsState = usePolling(eventsLoader, 30_000, [eventsLoader], "latest-analyzed-events-v2-100");
+  const eventsState = usePolling(eventsLoader, 30_000, [eventsLoader], "latest-news-feed-v3-include-pending");
   const listedState = usePolling(portfolioLoader, 90_000, [portfolioLoader], "portfolios");
   const healthState = usePolling(healthLoader, 30_000, [healthLoader]);
   const graphState = usePolling(graphLoader, 180_000, [graphLoader], "ticker-graph");
@@ -72,7 +70,9 @@ export default function App() {
     const today = new Date().toLocaleDateString();
     return Object.fromEntries(Object.entries(ordersByPortfolio).map(([id, row]) => [id, (row.pending || []).filter((plan) => plan.scheduled_for && new Date(plan.scheduled_for).toLocaleDateString() === today)]));
   }, [ordersByPortfolio]);
-  const events = (eventsState.data?.events || []).filter(fullyAnalyzed);
+  const newsFeedEvents = eventsState.data?.events || [];
+  const events = newsFeedEvents.filter(fullyAnalyzed);
+  const pendingNewsEvents = newsFeedEvents.filter((event) => !fullyAnalyzed(event));
   const portfolioSymbols = portfolios.flatMap((portfolio) => (portfolio.positions || []).map((position) => position.ticker_id));
   // Keep the quote request stable across news-page refreshes. Rotating the
   // symbols with each new story caused a new Yahoo batch even for held assets.
@@ -151,15 +151,15 @@ export default function App() {
     if (loadingMoreEvents) return;
     setLoadingMoreEvents(true);
     try {
-      const rawPage = await api.events({ limit: 20, offset: events.length });
-      const pageResult = { ...rawPage, events: (rawPage.events || []).filter(fullyAnalyzed) };
+      const rawPage = await api.events({ limit: 20, offset: newsFeedEvents.length, include_pending: 1 });
+      const pageResult = { ...rawPage, events: rawPage.events || [] };
       eventsState.setData((current) => {
         const rows = current?.events || [];
         const seen = new Set(rows.map(eventId));
         return { ...pageResult, events: [...rows, ...pageResult.events.filter((event) => !seen.has(eventId(event)))] };
       });
     } finally { setLoadingMoreEvents(false); }
-  }, [events.length, eventsState.setData, loadingMoreEvents]);
+  }, [newsFeedEvents.length, eventsState.setData, loadingMoreEvents]);
   const loadMoreOrders = useCallback(async () => {
     if (loadingMoreOrders) return;
     setLoadingMoreOrders(true);
@@ -179,7 +179,8 @@ export default function App() {
   const priceQuotes = useMemo(() => Object.fromEntries(Object.entries(marketPrices)), [marketPrices]);
   const quoteHeaderUpdated = quotesUpdatedAt || detailsState.updatedAt;
   const drawer = detail?.type === "event" ? <EventDrawer key={eventId(detail.event) || detail.event.headline} event={detail.event} portfolios={portfolios} orders={allOrders} pending={allPendingByPortfolio} prices={marketPrices} onClose={() => setDetail(null)} onTicker={openTicker}/> : detail?.type === "stock" ? <StockDrawer key={detail.ticker} symbol={detail.ticker} portfolios={portfolios} orders={allOrders} tickers={graphState.data || []} onClose={() => setDetail(null)} hasMoreOrders={hasMoreOrders} onLoadMoreOrders={loadMoreOrders} loadingMoreOrders={loadingMoreOrders} onEvent={openEvent}/> : detail?.type === "order" ? <OrderDetailDrawer key={detail.order.id} order={detail.order} portfolios={portfolios} events={events} tickers={graphState.data || []} onClose={() => setDetail(null)} onEvent={openEvent} onTicker={openTicker}/> : null;
-  const pageContent = page === "news" ? <NewsPage events={events} totalEvents={eventsState.data?.total_count} loading={eventsState.loading} quoteLoading={quoteLoading} error={eventStateError} refresh={eventsState.refresh} updatedAt={eventsState.updatedAt} quotes={shellQuotes} prices={priceQuotes} tickers={graphState.data || []} trackedStockCount={universeState.data?.length || 0} onEvent={openEvent} onTicker={openTicker} hasMore={eventsState.data?.has_more} onLoadMore={loadMoreEvents} loadingMore={loadingMoreEvents}/> : page === "portfolio" ? <PortfolioPage portfolios={portfolios} portfolioOrders={allOrders} loading={listedState.loading || detailsState.loading} quoteLoading={quoteLoading} error={listedState.error || (detailsState.error && !Object.keys(detailsState.data || {}).length ? detailsState.error : "")} refresh={refreshAll} onTicker={openTicker} onOrders={() => navigate("orders")} onRebalance={placeRebalance} pending={pendingByPortfolio} rebalances={rebalanceHistoryByPortfolio} prices={marketPrices} events={events} onEvent={openEvent} tickers={graphState.data || []}/> : page === "ledger" ? <LedgerPage events={events} loading={eventsState.loading || activityState.loading} error={eventsState.error || ""} refresh={eventsState.refresh} portfolios={portfolios} orders={allOrders} pending={allPendingByPortfolio} rebalances={rebalanceHistoryByPortfolio} onEvent={openEvent} onTicker={openTicker} hasMore={eventsState.data?.has_more} onLoadMore={loadMoreEvents} loadingMore={loadingMoreEvents} hasMoreOrders={hasMoreOrders} onLoadMoreOrders={loadMoreOrders} loadingMoreOrders={loadingMoreOrders}/> : page === "orders" ? <OrdersPage portfolios={portfolios} data={ordersByPortfolio} tickers={graphState.data || []} pending={allPendingByPortfolio} prices={marketPrices} quoteLoading={quoteLoading} loading={activityState.loading} error={activityState.error || ""} refresh={activityState.refresh} initialTicker={routeTicker} onTicker={openTicker} onOrder={openOrder} onLoadMore={loadMoreOrders} loadingMore={loadingMoreOrders}/> : <UniversePage tickers={graphState.data || []} loading={graphState.loading} error={graphState.error || ""} refresh={graphState.refresh} events={events} portfolios={portfolios} onTicker={openTicker} focusTicker={routeTicker}/>;
-  return <AppShell page={page} onNavigate={navigate} health={healthLabel} quotes={shellQuotes} quoteLoading={quoteLoading} events={events} onEvent={openEvent} onTicker={openTicker} updatedAt={quoteHeaderUpdated}>{pageContent}{drawer}</AppShell>;
+  const pageContent = page === "news" ? <NewsPage events={newsFeedEvents} totalEvents={eventsState.data?.total_count} loading={eventsState.loading} quoteLoading={quoteLoading} error={eventStateError} refresh={eventsState.refresh} updatedAt={eventsState.updatedAt} quotes={shellQuotes} prices={priceQuotes} tickers={graphState.data || []} trackedStockCount={universeState.data?.length || 0} onEvent={openEvent} onTicker={openTicker} hasMore={eventsState.data?.has_more} onLoadMore={loadMoreEvents} loadingMore={loadingMoreEvents}/> : page === "portfolio" ? <PortfolioPage portfolios={portfolios} portfolioOrders={allOrders} loading={listedState.loading || detailsState.loading} quoteLoading={quoteLoading} error={listedState.error || (detailsState.error && !Object.keys(detailsState.data || {}).length ? detailsState.error : "")} refresh={refreshAll} onTicker={openTicker} onOrders={() => navigate("orders")} onRebalance={placeRebalance} pending={pendingByPortfolio} rebalances={rebalanceHistoryByPortfolio} prices={marketPrices} events={events} onEvent={openEvent} tickers={graphState.data || []}/> : page === "ledger" ? <LedgerPage events={events} loading={eventsState.loading || activityState.loading} error={eventsState.error || ""} refresh={eventsState.refresh} portfolios={portfolios} orders={allOrders} pending={allPendingByPortfolio} rebalances={rebalanceHistoryByPortfolio} onEvent={openEvent} onTicker={openTicker} hasMore={eventsState.data?.has_more} onLoadMore={loadMoreEvents} loadingMore={loadingMoreEvents} hasMoreOrders={hasMoreOrders} onLoadMoreOrders={loadMoreOrders} loadingMoreOrders={loadingMoreOrders}/> : page === "orders" ? <OrdersPage portfolios={portfolios} data={ordersByPortfolio} tickers={graphState.data || []} pending={allPendingByPortfolio} prices={marketPrices} quoteLoading={quoteLoading} loading={activityState.loading} error={activityState.error || ""} refresh={activityState.refresh} initialTicker={routeTicker} onTicker={openTicker} onOrder={openOrder} onLoadMore={loadMoreOrders} loadingMore={loadingMoreOrders}/> : <UniversePage tickers={graphState.data || []} loading={graphState.loading} error={graphState.error || ""} refresh={graphState.refresh} events={events} portfolios={portfolios} onTicker={openTicker} focusTicker={routeTicker}/>;
+  const runnerEvents = [...events, ...pendingNewsEvents].sort((a, b) => new Date(eventTime(b) || 0) - new Date(eventTime(a) || 0));
+  return <AppShell page={page} onNavigate={navigate} health={healthLabel} quotes={shellQuotes} quoteLoading={quoteLoading} events={runnerEvents} onEvent={openEvent} onTicker={openTicker} updatedAt={quoteHeaderUpdated}>{pageContent}{drawer}</AppShell>;
 }
 
