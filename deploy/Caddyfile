@@ -1,0 +1,7 @@
+{$API_HOSTNAME} {
+	@trading path /api/trading/*
+	reverse_proxy @trading trading:8001
+
+	@news path /api/*
+	reverse_proxy @news backend:8000
+}

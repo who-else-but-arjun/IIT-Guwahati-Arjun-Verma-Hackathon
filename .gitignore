@@ -1,0 +1,16 @@
+.env
+.kilo/
+__pycache__/
+*.py[cod]
+*.sqlite3
+.venv/
+venv/
+node_modules/
+dist/
+.pytest_cache/
+.kaggle/
+.cache/
+artifacts/
+src/backend/.django/
+src/backend/.ruff_cache
+data/benchmarks/

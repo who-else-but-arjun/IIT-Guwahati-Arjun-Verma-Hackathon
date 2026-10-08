@@ -1,0 +1,233 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_DATABASE: financial_nlp
+    volumes:
+      - mongo_data:/data/db
+      # The checked-in snapshot is restored only when Mongo initializes an empty volume.
+      - ./data/seed/financial_nlp.archive.gz:/seed/financial_nlp.archive.gz:ro
+      - ./data/seed/10-restore-financial-nlp.sh:/docker-entrypoint-initdb.d/10-restore-financial-nlp.sh:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 15s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    command: ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "8", "--timeout", "90"]
+    restart: unless-stopped
+    environment:
+      KAGGLEHUB_CACHE: /models
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: financial_nlp
+      REDIS_URL: redis://redis:6379/0
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      APCA_API_KEY_ID: ${APCA_API_KEY_ID:-}
+      APCA_API_SECRET_KEY: ${APCA_API_SECRET_KEY:-}
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      NLP_TRADING_SOCKET_HOST: trading
+      NLP_TRADING_SOCKET_PORT: 8765
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src/backend:/app
+      - model_store:/models
+    depends_on:
+      mongo:
+        condition: service_healthy
+      trading:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  trading:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    command: ["gunicorn", "app.wsgi:application", "--bind", "0.0.0.0:8001", "--workers", "1", "--threads", "4"]
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: app.trading.config.settings
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: financial_nlp
+      REDIS_URL: redis://redis:6379/0
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-paper-trading-key}
+    ports:
+      - "8001:8001"
+    expose:
+      - "8765"
+    volumes:
+      - ./src/backend:/app
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  alpaca-news:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    command: ["python", "-m", "services.connectors.retriever", "listen"]
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      NEWS_ANALYSIS_WORKER: "false"
+      KAGGLEHUB_CACHE: /models
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: financial_nlp
+      REDIS_URL: redis://redis:6379/0
+      APCA_API_KEY_ID: ${APCA_API_KEY_ID:-}
+      APCA_API_SECRET_KEY: ${APCA_API_SECRET_KEY:-}
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      NLP_TRADING_SOCKET_HOST: trading
+      NLP_TRADING_SOCKET_PORT: 8765
+    volumes:
+      - ./src/backend:/app
+      - model_store:/models
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      trading:
+        condition: service_started
+
+  bluesky-news:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    command: ["python", "-m", "services.connectors.retriever", "bluesky"]
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      NEWS_ANALYSIS_WORKER: "false"
+      KAGGLEHUB_CACHE: /models
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: financial_nlp
+      REDIS_URL: redis://redis:6379/0
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      NLP_TRADING_SOCKET_HOST: trading
+      NLP_TRADING_SOCKET_PORT: 8765
+    volumes:
+      - ./src/backend:/app
+      - model_store:/models
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      trading:
+        condition: service_started
+
+  finnhub-poller:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    command: ["python", "-m", "services.connectors.retriever", "poll-news", "--interval-seconds", "900", "--lookback-days", "1"]
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      NEWS_ANALYSIS_WORKER: "false"
+      KAGGLEHUB_CACHE: /models
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: financial_nlp
+      REDIS_URL: redis://redis:6379/0
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      NLP_TRADING_SOCKET_HOST: trading
+      NLP_TRADING_SOCKET_PORT: 8765
+    volumes:
+      - ./src/backend:/app
+      - model_store:/models
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      trading:
+        condition: service_started
+
+  news-analysis-worker:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    command: ["python", "-m", "services.connectors.retriever", "analyze", "--idle-seconds", "3"]
+    restart: unless-stopped
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+      KAGGLEHUB_CACHE: /models
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: financial_nlp
+      REDIS_URL: redis://redis:6379/0
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      NLP_TRADING_SOCKET_HOST: trading
+      NLP_TRADING_SOCKET_PORT: 8765
+    volumes:
+      - ./src/backend:/app
+      - model_store:/models
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      trading:
+        condition: service_started
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src/frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      VITE_API_URL: http://localhost:8000
+    depends_on:
+      - backend
+
+volumes:
+  redis_data:
+  mongo_data:
+  model_store:
+  frontend_node_modules:

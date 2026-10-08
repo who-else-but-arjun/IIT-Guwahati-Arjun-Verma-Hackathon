@@ -1,0 +1,844 @@
+{
+  "notice": "Illustrative normalized DTO fixtures generated locally for manual schema review. These are not live API responses or real market data.",
+  "alpaca_news_dtos": [
+    {
+      "headline": "AAPL illustrative Alpaca headline 1",
+      "text": "Additional sample article content for AAPL.",
+      "date": "2026-10-02",
+      "time": "14:37:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-001",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for AAPL.",
+        "updated_at": "2026-10-02T14:37:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "AAPL",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/1"
+    },
+    {
+      "headline": "MSFT illustrative Alpaca headline 2",
+      "text": "Additional sample article content for MSFT.",
+      "date": "2026-10-02",
+      "time": "14:44:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-002",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for MSFT.",
+        "updated_at": "2026-10-02T14:44:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/2"
+    },
+    {
+      "headline": "AMZN illustrative Alpaca headline 3",
+      "text": "Additional sample article content for AMZN.",
+      "date": "2026-10-02",
+      "time": "14:51:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-003",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for AMZN.",
+        "updated_at": "2026-10-02T14:51:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "AMZN",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/3"
+    },
+    {
+      "headline": "NVDA illustrative Alpaca headline 4",
+      "text": "Additional sample article content for NVDA.",
+      "date": "2026-10-02",
+      "time": "14:58:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-004",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for NVDA.",
+        "updated_at": "2026-10-02T14:58:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "NVDA",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/4"
+    },
+    {
+      "headline": "GOOGL illustrative Alpaca headline 5",
+      "text": "Additional sample article content for GOOGL.",
+      "date": "2026-10-02",
+      "time": "15:05:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-005",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for GOOGL.",
+        "updated_at": "2026-10-02T15:05:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "GOOGL",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/5"
+    },
+    {
+      "headline": "META illustrative Alpaca headline 6",
+      "text": "Additional sample article content for META.",
+      "date": "2026-10-02",
+      "time": "15:12:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-006",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for META.",
+        "updated_at": "2026-10-02T15:12:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "META",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/6"
+    },
+    {
+      "headline": "JPM illustrative Alpaca headline 7",
+      "text": "Additional sample article content for JPM.",
+      "date": "2026-10-02",
+      "time": "15:19:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-007",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for JPM.",
+        "updated_at": "2026-10-02T15:19:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "JPM",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/7"
+    },
+    {
+      "headline": "XOM illustrative Alpaca headline 8",
+      "text": "Additional sample article content for XOM.",
+      "date": "2026-10-02",
+      "time": "15:26:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-008",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for XOM.",
+        "updated_at": "2026-10-02T15:26:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "XOM",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/8"
+    },
+    {
+      "headline": "WMT illustrative Alpaca headline 9",
+      "text": "Additional sample article content for WMT.",
+      "date": "2026-10-02",
+      "time": "15:33:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-009",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for WMT.",
+        "updated_at": "2026-10-02T15:33:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "WMT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/9"
+    },
+    {
+      "headline": "COST illustrative Alpaca headline 10",
+      "text": "Additional sample article content for COST.",
+      "date": "2026-10-02",
+      "time": "15:40:00Z",
+      "metadata": {
+        "provider": "alpaca",
+        "provider_article_id": "alpaca-sample-010",
+        "source": "sample-wire-fixture",
+        "author": "Sample News Desk",
+        "summary": "Illustrative Alpaca summary for COST.",
+        "updated_at": "2026-10-02T15:40:00Z"
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "COST",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/alpaca/10"
+    }
+  ],
+  "finnhub_news_dtos": [
+    {
+      "headline": "AAPL illustrative Finnhub headline 1",
+      "text": "Illustrative Finnhub summary for AAPL.",
+      "date": "2026-10-02",
+      "time": "15:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900001",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for AAPL.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "AAPL",
+          "relevance_score": 0.0,
+          "scored_at": null
+        },
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/1"
+    },
+    {
+      "headline": "MSFT illustrative Finnhub headline 2",
+      "text": "Illustrative Finnhub summary for MSFT.",
+      "date": "2026-10-02",
+      "time": "16:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900002",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for MSFT.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/2"
+    },
+    {
+      "headline": "AMZN illustrative Finnhub headline 3",
+      "text": "Illustrative Finnhub summary for AMZN.",
+      "date": "2026-10-02",
+      "time": "17:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900003",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for AMZN.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "AMZN",
+          "relevance_score": 0.0,
+          "scored_at": null
+        },
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/3"
+    },
+    {
+      "headline": "NVDA illustrative Finnhub headline 4",
+      "text": "Illustrative Finnhub summary for NVDA.",
+      "date": "2026-10-02",
+      "time": "18:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900004",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for NVDA.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        },
+        {
+          "ticker_id": "NVDA",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/4"
+    },
+    {
+      "headline": "GOOGL illustrative Finnhub headline 5",
+      "text": "Illustrative Finnhub summary for GOOGL.",
+      "date": "2026-10-02",
+      "time": "19:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900005",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for GOOGL.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "GOOGL",
+          "relevance_score": 0.0,
+          "scored_at": null
+        },
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/5"
+    },
+    {
+      "headline": "META illustrative Finnhub headline 6",
+      "text": "Illustrative Finnhub summary for META.",
+      "date": "2026-10-02",
+      "time": "20:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900006",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for META.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "META",
+          "relevance_score": 0.0,
+          "scored_at": null
+        },
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/6"
+    },
+    {
+      "headline": "JPM illustrative Finnhub headline 7",
+      "text": "Illustrative Finnhub summary for JPM.",
+      "date": "2026-10-02",
+      "time": "21:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900007",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for JPM.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "JPM",
+          "relevance_score": 0.0,
+          "scored_at": null
+        },
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/7"
+    },
+    {
+      "headline": "XOM illustrative Finnhub headline 8",
+      "text": "Illustrative Finnhub summary for XOM.",
+      "date": "2026-10-02",
+      "time": "22:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900008",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for XOM.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        },
+        {
+          "ticker_id": "XOM",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/8"
+    },
+    {
+      "headline": "WMT illustrative Finnhub headline 9",
+      "text": "Illustrative Finnhub summary for WMT.",
+      "date": "2026-10-02",
+      "time": "23:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900009",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for WMT.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        },
+        {
+          "ticker_id": "WMT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/9"
+    },
+    {
+      "headline": "COST illustrative Finnhub headline 10",
+      "text": "Illustrative Finnhub summary for COST.",
+      "date": "2026-10-03",
+      "time": "00:30:00Z",
+      "metadata": {
+        "provider": "finnhub",
+        "provider_article_id": "900010",
+        "source": "sample-wire-fixture",
+        "author": "",
+        "summary": "Illustrative Finnhub summary for COST.",
+        "updated_at": null
+      },
+      "category": null,
+      "sentiment": null,
+      "relevant_tickers": [
+        {
+          "ticker_id": "COST",
+          "relevance_score": 0.0,
+          "scored_at": null
+        },
+        {
+          "ticker_id": "MSFT",
+          "relevance_score": 0.0,
+          "scored_at": null
+        }
+      ],
+      "url": "https://example.invalid/finnhub/10"
+    }
+  ],
+  "ticker_dtos": [
+    {
+      "ticker_name": {
+        "ticker_id": "AAPL",
+        "company_name": "Apple Inc."
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "AAPL",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 101.0,
+          "high": 104.5,
+          "low": 100.25,
+          "close": 103.75,
+          "adj_close": 103.5,
+          "volume": 1125000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    },
+    {
+      "ticker_name": {
+        "ticker_id": "MSFT",
+        "company_name": "Microsoft Corporation"
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "MSFT",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 102.0,
+          "high": 105.5,
+          "low": 101.25,
+          "close": 104.75,
+          "adj_close": 104.5,
+          "volume": 1250000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    },
+    {
+      "ticker_name": {
+        "ticker_id": "AMZN",
+        "company_name": "Amazon.com, Inc."
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "AMZN",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 103.0,
+          "high": 106.5,
+          "low": 102.25,
+          "close": 105.75,
+          "adj_close": 105.5,
+          "volume": 1375000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    },
+    {
+      "ticker_name": {
+        "ticker_id": "NVDA",
+        "company_name": "NVIDIA Corporation"
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "NVDA",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 104.0,
+          "high": 107.5,
+          "low": 103.25,
+          "close": 106.75,
+          "adj_close": 106.5,
+          "volume": 1500000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    },
+    {
+      "ticker_name": {
+        "ticker_id": "GOOGL",
+        "company_name": "Alphabet Inc."
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "GOOGL",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 105.0,
+          "high": 108.5,
+          "low": 104.25,
+          "close": 107.75,
+          "adj_close": 107.5,
+          "volume": 1625000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    },
+    {
+      "ticker_name": {
+        "ticker_id": "META",
+        "company_name": "Meta Platforms, Inc."
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "META",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 106.0,
+          "high": 109.5,
+          "low": 105.25,
+          "close": 108.75,
+          "adj_close": 108.5,
+          "volume": 1750000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    },
+    {
+      "ticker_name": {
+        "ticker_id": "JPM",
+        "company_name": "JPMorgan Chase & Co."
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "JPM",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 107.0,
+          "high": 110.5,
+          "low": 106.25,
+          "close": 109.75,
+          "adj_close": 109.5,
+          "volume": 1875000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    },
+    {
+      "ticker_name": {
+        "ticker_id": "XOM",
+        "company_name": "Exxon Mobil Corporation"
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "XOM",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 108.0,
+          "high": 111.5,
+          "low": 107.25,
+          "close": 110.75,
+          "adj_close": 110.5,
+          "volume": 2000000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    },
+    {
+      "ticker_name": {
+        "ticker_id": "WMT",
+        "company_name": "Walmart Inc."
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "WMT",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 109.0,
+          "high": 112.5,
+          "low": 108.25,
+          "close": 111.75,
+          "adj_close": 111.5,
+          "volume": 2125000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    },
+    {
+      "ticker_name": {
+        "ticker_id": "COST",
+        "company_name": "Costco Wholesale Corporation"
+      },
+      "ticker_data": [
+        {
+          "ticker_id": "COST",
+          "timestamp": "2026-10-02T20:00:00Z",
+          "open": 110.0,
+          "high": 113.5,
+          "low": 109.25,
+          "close": 112.75,
+          "adj_close": 112.5,
+          "volume": 2250000,
+          "dividends": 0.0,
+          "stock_splits": 0.0
+        }
+      ],
+      "ticker_score": {
+        "sentiment": {
+          "score": 0.0,
+          "tag": "neutral",
+          "impact_score": 0.0,
+          "scored_at": null
+        },
+        "delta_score": 0.0
+      },
+      "relevant_events": [],
+      "ticker_graph": null
+    }
+  ]
+}
