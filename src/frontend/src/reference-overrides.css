@@ -5,7 +5,7 @@ html,body,#root{min-height:100%;background:var(--bg)}
 body{font:15px/1.5 Archivo,Arial,sans-serif;color:var(--ink);font-variant-numeric:tabular-nums}
 .run{position:sticky;top:0;z-index:70;height:34px;display:flex;background:#111;color:#fff;font-size:13px;border-bottom:1px solid #333}
 .run>b{background:var(--red);color:#fff;padding:0 12px;display:flex;align-items:center;font-size:11px;letter-spacing:.08em;flex:none}
-.rw{overflow:hidden;flex:1;min-width:0}.rt{display:flex;width:max-content;animation:rn var(--d,70s) linear infinite;will-change:transform}.rt:hover,.rt:focus-within{animation-play-state:paused}.rt button{padding:0 24px;height:34px;display:flex;gap:10px;align-items:center;white-space:nowrap;color:inherit;background:none;border:0;border-right:1px solid #333;font-size:12px}.rt .tm{opacity:.65}.rt .rh{font-weight:600}.rt button:hover .rh{text-decoration:underline;text-decoration-color:var(--red);text-decoration-thickness:2px}
+.rw{overflow:hidden;flex:1;min-width:0}.rt{display:flex;width:max-content;animation:rn var(--d,70s) linear infinite}.rt:hover,.rt:focus-within{animation-play-state:paused}.rt button{flex:0 0 auto;padding:0 24px;height:34px;display:flex;gap:10px;align-items:center;white-space:nowrap;color:inherit;background:none;border:0;border-right:1px solid #333;font-size:12px}.rt .tm{opacity:.65}.rt .rh{font-weight:600}.rt button:hover .rh{text-decoration:underline;text-decoration-color:var(--red);text-decoration-thickness:2px}
 .top{position:sticky;top:34px;z-index:60;min-height:62px;background:var(--bg);border-bottom:2px solid var(--ink);display:flex;flex-wrap:wrap;align-items:center;gap:8px 22px;padding:9px 24px}
 .top .brand{display:flex;align-items:baseline;gap:8px;text-decoration:none;font-weight:800;font-size:22px;letter-spacing:-.02em;color:inherit;min-width:max-content}.top .brand b{font:800 22px/1 Archivo,Arial,sans-serif;letter-spacing:-.02em}.top .brand span{font-weight:500;font-size:13px;color:var(--mut);letter-spacing:0}
 .top nav{display:flex;gap:4px;flex:1;overflow-x:auto;min-width:350px}.top nav a{padding:8px 10px;text-decoration:none;font-weight:600;font-size:13px;border-bottom:3px solid transparent;color:inherit;white-space:nowrap;display:flex;align-items:center;gap:7px}.top nav a.on{color:var(--red);border-color:var(--red)}.nav-glyph{width:15px;height:15px;flex:none}
@@ -1221,4 +1221,102 @@ canvas:focus-visible,
   .table-scroll { max-width: 100%; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
   .event-stock-table, .event-portfolio-actions { min-width: 570px; }
   .stock-position-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+}
+
+/* Keep order history as a real, horizontally scrollable table on phones. */
+@media (max-width: 720px) {
+  .order-table-wrap { overflow-x: auto; }
+  .order-table-wrap .orders-table { display: table; width: max-content; min-width: 930px; }
+  .order-table-wrap .orders-table thead { display: table-header-group; }
+  .order-table-wrap .orders-table tbody { display: table-row-group; }
+  .order-table-wrap .orders-table tr { display: table-row; padding: 0; border: 0; }
+  .order-table-wrap .orders-table td,
+  .order-table-wrap .orders-table td.numeric { display: table-cell; padding: 8px; white-space: nowrap; text-align: inherit; border-bottom: 1px solid var(--line); }
+  .order-table-wrap .orders-table td::before { display: none; content: none; }
+  .order-table-wrap .orders-table .order-row { cursor: pointer; }
+  .order-table-wrap .orders-table .order-row:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
+}
+
+/* The Universe filter drawer can be hidden to leave the map unobstructed. */
+.universe-overlay-toolbar.filters-collapsed { right: 16px; }
+.graph-controls.collapsed { display: none; }
+@media (max-width: 760px) {
+  .universe-overlay-toolbar.filters-collapsed { right: 10px; }
+}
+.universe-overlay-toolbar .graph-filter-toggle {
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 4px 18px #1112;
+}
+:root[data-theme="dark"] .universe-overlay-toolbar .graph-filter-toggle { background: #191a1c; color: #ececea; border-color: #3b3d42; }
+
+/* Give the pending plan its own readable spacing inside Portfolio activity. */
+@media (max-width: 700px) {
+  .activity-content { min-width: 0; padding-bottom: 18px; }
+  .activity-content > .table-heading { align-items: flex-start; gap: 12px; padding: 16px 12px 12px; }
+  .activity-content > .table-heading > div { min-width: 0; }
+  .activity-content > .table-heading .button-secondary { flex: 0 0 auto; max-width: 145px; white-space: normal; line-height: 1.35; }
+  .pending-callout { align-items: flex-start; gap: 10px; margin: 4px 12px 18px; padding: 13px 12px; }
+  .pending-plan-content { display: grid; gap: 3px; }
+  .pending-plan-content > b { display: block; font-size: 11px; line-height: 1.45; }
+  .pending-plan-card { margin-top: 9px; padding: 12px; }
+  .pending-plan-card > header { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .pending-plan-card > header b { font-size: 11px; }
+  .pending-plan-card > header span { font-size: 10px; }
+  .pending-order-list { gap: 0; margin-top: 10px; }
+  .pending-plan-card .pending-order-row { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 10px; padding: 10px 0; }
+  .pending-plan-card .pending-order-row .ticker-cell { min-width: 0; }
+  .pending-plan-card .pending-order-row .side-badge { justify-self: end; }
+  .pending-plan-card .pending-order-row > strong { grid-column: 1; font-size: 10px; }
+  .pending-order-value { grid-column: 2; grid-row: 2; font-size: 10px; }
+  .pending-plan-note { margin-top: 9px; line-height: 1.5; }
+  .activity-history { padding: 0 12px; }
+  .activity-history > h3 { margin: 18px 0 5px; }
+  .activity-history .activity-item { gap: 9px; padding: 12px 0; }
+  .activity-history .activity-item > div { min-width: 0; }
+  .activity-content > .text-button { margin: 14px 12px 0; }
+}
+:root[data-theme="dark"] .pending-plan-card { border-color: #35373c; }
+:root[data-theme="dark"] .activity-history .activity-item { border-color: #303236; }
+
+/* Keep chart labels and plot geometry legible on narrow screens; swipe horizontally to inspect the full timeline. */
+@media (max-width: 700px) {
+  .chart-wrap,
+  .weight-stack-plot,
+  .news-purchase-area-wrap,
+  .news-purchase-boxplot-wrap,
+  .price-history-chart .chart-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
+  }
+  .chart-wrap .performance-chart,
+  .weight-stack-plot .performance-chart,
+  .news-purchase-area,
+  .news-purchase-boxplot {
+    width: max(640px, 100%);
+    max-width: none;
+  }
+  .chart-wrap .performance-chart { height: auto; }
+  .weight-stack-plot .performance-chart,
+  .news-purchase-area { height: 230px; }
+  .news-purchase-boxplot { height: auto; }
+  .chart-legend,
+  .weight-chart-legend { flex-wrap: wrap; }
+}
+
+/* Avoid mobile browser compositor glitches that can blank an animated ticker layer. */
+@media (max-width: 720px) {
+  .run { position: relative; z-index: 70; overflow: hidden; isolation: isolate; }
+  .rt { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
+  .rt button, .rt .rh { color: #fff; }
 }
