@@ -2,11 +2,12 @@
 
 ## S&P Global & Crisil Campus Hackathon
 
-**Candidate Name:** Arjun Verma
-**College Email ID:** arjun.verma@iitg.ac.in
-**College / Campus:** IIT Guwahati
-**Demo Video Link:** [YouTube / Unlisted]  
-**Slide Deck Link (if hosted externally):** [Slide deck link, if available]
+- **Candidate Name:** Arjun Verma
+- **College Email ID:** arjun.verma@iitg.ac.in
+- **College / Campus:** IIT Guwahati
+- **Demo Video Link:** [YouTube / Unlisted]
+- **Website Link:** https://crisil-financial-nlp.pages.dev/news (live until 8th Nov)
+- **Slide Deck Link (if hosted externally):** [Slide deck link, if available]
 
 ## 1. Project Overview / Problem Statement & Approach
 
