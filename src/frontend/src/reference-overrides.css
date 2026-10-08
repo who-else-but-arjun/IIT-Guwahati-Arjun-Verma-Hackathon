@@ -1317,6 +1317,5 @@ canvas:focus-visible,
 /* Avoid mobile browser compositor glitches that can blank an animated ticker layer. */
 @media (max-width: 720px) {
   .run { position: relative; z-index: 70; overflow: hidden; isolation: isolate; }
-  .rt { -webkit-backface-visibility: hidden; backface-visibility: hidden; }
   .rt button, .rt .rh { color: #fff; }
 }
