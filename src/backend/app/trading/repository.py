@@ -355,11 +355,19 @@ class TradingRepository:
                         target_weights: dict[str, float], event_ids: list[str] | None = None,
                         ticker_event_ids: dict[str, list[str]] | None = None) -> PendingRebalance:
         """Persist a next-session target, merging same-day signals into one plan."""
-        current = self.pending_rebalances.find_one({
+        query = {
             "portfolio_id": portfolio_id,
             "status": PendingRebalanceStatus.PENDING.value,
-        }, sort=[("scheduled_for", ASCENDING)])
-        if current and _plan_session_key(current["scheduled_for"]) == _plan_session_key(scheduled_for):
+        }
+
+        def find_session_plan() -> dict | None:
+            # There may be more than one future market session pending. Looking
+            # at only the earliest plan made a later-session insert collide with
+            # the unique index forever when an earlier plan was still pending.
+            return next((row for row in self.pending_rebalances.find(query).sort("scheduled_for", ASCENDING)
+                         if _plan_session_key(row["scheduled_for"]) == _plan_session_key(scheduled_for)), None)
+
+        def merge(current: dict) -> PendingRebalance:
             merged = dict(current.get("target_weights", {}))
             merged.update(target_weights)
             merged_event_ids = list(dict.fromkeys([
@@ -374,13 +382,19 @@ class TradingRepository:
                     *merged_ticker_event_ids.get(ticker, []), *ids,
                 ]))
             self.pending_rebalances.update_one(
-                {"_id": current["_id"]},
+                {"_id": current["_id"], "status": PendingRebalanceStatus.PENDING.value},
                 {"$set": {"target_weights": merged, "event_ids": merged_event_ids,
                           "ticker_event_ids": merged_ticker_event_ids,
                           "updated_at": datetime.now(timezone.utc), "reason": reason}},
             )
-            current = self.pending_rebalances.find_one({"_id": current["_id"]})
-            return PendingRebalance.model_validate(current)
+            updated = self.pending_rebalances.find_one({"_id": current["_id"]})
+            if updated is None:
+                raise RuntimeError("Pending rebalance changed while merging a news decision.")
+            return PendingRebalance.model_validate(updated)
+
+        current = find_session_plan()
+        if current:
+            return merge(current)
         pending = PendingRebalance(
             _id=str(ObjectId()),
             portfolio_id=portfolio_id,
@@ -396,12 +410,12 @@ class TradingRepository:
             self.pending_rebalances.insert_one(pending.model_dump(mode="python", by_alias=True))
         except DuplicateKeyError:
             # A second news source may have created this same session plan
-            # between our lookup and insert; retry now that it is visible.
-            return self.queue_rebalance(
-                portfolio_id=portfolio_id, event_id=event_id, event_ids=event_ids,
-                ticker_event_ids=ticker_event_ids, decision_at=decision_at,
-                scheduled_for=scheduled_for, reason=reason, target_weights=target_weights,
-            )
+            # between our lookup and insert. Re-read that session specifically;
+            # never recurse on a different earlier pending session.
+            current = find_session_plan()
+            if current is None:
+                raise
+            return merge(current)
         return pending
 
     def update_pending_news_targets(self, pending_id: str, *, target_weights: dict[str, float],

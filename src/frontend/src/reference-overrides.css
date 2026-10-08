@@ -482,7 +482,8 @@ html:hover{scrollbar-color:#a9adb477 transparent}
 }
 .ledger-table-wrap .data-table,
 .order-table-wrap .data-table { width: 100%; }
-.ticker-mark { position: relative; }
+.ticker-mark { position: relative; isolation: isolate; z-index: 0; }
+.data-table th { z-index: 2; }
 .ticker-mark .ticker-mark-fallback {
   position: absolute;
   inset: 0;
@@ -950,9 +951,13 @@ html:hover{scrollbar-color:#a9adb477 transparent}
 .pending-plan-note { display: block; margin-top: 7px; }
 .pending-plan-empty { margin: 8px 0 0; }
 .rebalance-target-chips { display: flex; flex-wrap: wrap; gap: 7px; }
-.rebalance-target-chip { display: inline-flex; align-items: center; gap: 10px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: 9px; }
+.rebalance-target-chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: 9px; text-align: left; }
 .rebalance-target-chip:hover { border-color: var(--red); }
-.rebalance-target-chip b { font: 500 9px var(--mono); }
+.rebalance-target-chip .ticker-mark { flex: 0 0 24px; width: 24px; height: 24px; }
+.rebalance-target-company { display: grid; gap: 2px; min-width: 0; }
+.rebalance-target-company b { overflow: hidden; max-width: 180px; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.rebalance-target-company small { color: var(--mut); font: 8px var(--mono); }
+.rebalance-target-chip strong { margin-left: 3px; font: 500 9px var(--mono); }
 :root[data-theme="dark"] .purchase-area-tooltip button:hover { background: #292b2f; }
 :root[data-theme="dark"] .pending-plan-card { background: #171819; }
 @media (max-width: 700px) {

@@ -120,8 +120,8 @@ export function OrderDetailDrawer({ order, portfolios = [], events = [], tickers
   </Drawer>;
 }
 
-export function PortfolioMarkerDrawer({ marker, portfolios = [], events: availableEvents = [], currency = "USD", onClose, onEvent, onTicker }) {
-  if (marker.kind === "rebalance") return <RebalanceDetailDrawer row={marker} portfolios={portfolios} events={availableEvents} onClose={onClose} onEvent={onEvent} onTicker={onTicker}/>;
+export function PortfolioMarkerDrawer({ marker, portfolios = [], events: availableEvents = [], tickers = [], currency = "USD", onClose, onEvent, onTicker }) {
+  if (marker.kind === "rebalance") return <RebalanceDetailDrawer row={marker} portfolios={portfolios} events={availableEvents} tickers={tickers} onClose={onClose} onEvent={onEvent} onTicker={onTicker}/>;
   const events = marker.events || [];
   const orders = marker.orders || [];
   const isNews = marker.kind === "event";

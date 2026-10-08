@@ -248,6 +248,58 @@ class MongoRepository(TickerRepositoryMixin):
         )
         return self.news_events.delete_many({"_id": {"$in": oldest_ids}}).deleted_count
 
+    def pending_news_count(self) -> int:
+        """Count durable work waiting for analysis or score application."""
+        return self.news_events.count_documents({"metadata.analysis_status": {"$in": [
+            NewsAnalysisStatus.QUEUED.value,
+            NewsAnalysisStatus.PENDING_ANALYSIS.value,
+            NewsAnalysisStatus.APPLYING_SCORES.value,
+        ]}})
+
+    def save_news_if_queue_below(self, event: NewsEventDTO, *, max_pending: int) -> str | None:
+        """Apply backpressure to live streams when their durable queue is full."""
+        if self.pending_news_count() >= max_pending:
+            return None
+        return self.save_news(event)
+
+    def save_news_batch_bounded(self, events: Iterable[NewsEventDTO], *, max_pending: int,
+                                max_new: int) -> list[str]:
+        """Persist at most the available queue slots, preferring the newest unseen stories."""
+        rows = list(events)
+        slots = min(max_new, max_pending - self.pending_news_count())
+        if slots <= 0 or not rows:
+            return []
+
+        existing_by_provider: dict[str, set[str]] = {}
+        identifiers: dict[str, set[str]] = {}
+        for event in rows:
+            provider = str(event.metadata.get("provider") or "")
+            article_id = event.metadata.get("provider_article_id")
+            if provider and article_id:
+                identifiers.setdefault(provider, set()).add(str(article_id))
+        for provider, article_ids in identifiers.items():
+            existing_by_provider[provider] = {
+                str(row["metadata"]["provider_article_id"])
+                for row in self.news_events.find(
+                    {"metadata.provider": provider,
+                     "metadata.provider_article_id": {"$in": list(article_ids)}},
+                    {"metadata.provider_article_id": 1},
+                )
+            }
+
+        saved: list[str] = []
+        for event in rows:
+            provider = str(event.metadata.get("provider") or "")
+            article_id = str(event.metadata.get("provider_article_id") or "")
+            if article_id and article_id in existing_by_provider.get(provider, set()):
+                continue
+            saved.append(self.save_news(event))
+            if article_id:
+                existing_by_provider.setdefault(provider, set()).add(article_id)
+            if len(saved) >= slots:
+                break
+        return saved
+
     def save_news_analysis(self, event_id: str, event: NewsEventDTO) -> None:
         """Persist completed model outputs and synchronize reciprocal event links."""
         if not ObjectId.is_valid(event_id):

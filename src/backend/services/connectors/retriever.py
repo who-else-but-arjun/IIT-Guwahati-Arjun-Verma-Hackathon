@@ -22,6 +22,8 @@ from services.workflow import NewsProcessingWorkflow
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("sp100-retriever")
 ANALYSIS_RETRY_INTERVAL_SECONDS = 5
+NEWS_QUEUE_HIGH_WATERMARK = max(25, int(os.getenv("NEWS_QUEUE_HIGH_WATERMARK", "250")))
+MAX_NEWS_PER_POLL = max(1, int(os.getenv("MAX_NEWS_PER_POLL", "50")))
 
 
 def _analysis_worker(repository):
@@ -30,7 +32,11 @@ def _analysis_worker(repository):
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="news-analysis")
 
     def enqueue(article):
-        return repository.save_news(article)
+        event_id = repository.save_news_if_queue_below(article, max_pending=NEWS_QUEUE_HIGH_WATERMARK)
+        if event_id is None:
+            logger.info("Live-news intake paused at %s queued stories; skipped provider event.",
+                        repository.pending_news_count())
+        return event_id
 
     return workflow, executor, enqueue
 
@@ -133,11 +139,22 @@ def main():
             while not stop.is_set():
                 cycle_started = time.monotonic()
                 try:
-                    rows = connector.fetch_company_news(
-                        SP100_COMPANIES.keys(), lookback_days=args.lookback_days
-                    )
-                    event_ids = [enqueue(row) for row in rows]
-                    logger.info("Finnhub poll complete: fetched %d deduplicated articles and persisted %d for background analysis.", len(rows), len(event_ids))
+                    pending_count = store.pending_news_count()
+                    if pending_count >= NEWS_QUEUE_HIGH_WATERMARK:
+                        logger.info("Finnhub intake paused: %d queued stories reached the %d-story high-water mark.",
+                                    pending_count, NEWS_QUEUE_HIGH_WATERMARK)
+                    else:
+                        rows = connector.fetch_company_news(
+                            SP100_COMPANIES.keys(), lookback_days=args.lookback_days
+                        )
+                        event_ids = store.save_news_batch_bounded(
+                            rows, max_pending=NEWS_QUEUE_HIGH_WATERMARK,
+                            max_new=MAX_NEWS_PER_POLL,
+                        )
+                        logger.info(
+                            "Finnhub poll complete: fetched %d deduplicated articles, persisted %d new stories, queue=%d/%d.",
+                            len(rows), len(event_ids), store.pending_news_count(), NEWS_QUEUE_HIGH_WATERMARK,
+                        )
                 except Exception:
                     logger.exception("Finnhub poll failed; will retry after %d seconds.", args.interval_seconds)
                 wait_seconds = max(0.0, args.interval_seconds - (time.monotonic() - cycle_started))
@@ -163,6 +180,8 @@ def main():
             retry_thread.start()
         def save_article(article):
             event_id = enqueue(article)
+            if event_id is None:
+                return
             logger.info(
                 "NEW_ARTICLE event_id=%s provider_id=%s source_tickers=%s headline=%s analysis=queued",
                 event_id,

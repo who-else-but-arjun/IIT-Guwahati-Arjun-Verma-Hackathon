@@ -76,14 +76,17 @@ export function PortfolioPage({ portfolios, portfolioOrders = [], loading, quote
   };
   const safeOrders = Array.isArray(portfolioOrders) ? portfolioOrders : [];
   const ordersForPlan = (plan) => {
+    if (plan.status !== "filled") return [];
     const ids = new Set([...(plan.event_ids || []), ...Object.values(plan.ticker_event_ids || {}).flat()]);
-    const planTime = new Date(plan.executed_at || plan.scheduled_for || plan.decision_at || plan.created_at).getTime();
+    const planTime = new Date(plan.executed_at).getTime();
     return safeOrders.filter((order) => {
-      if (order.portfolio_id !== plan.portfolio_id) return false;
+      if (String(order.portfolio_id) !== String(plan.portfolio_id || selected?.id)) return false;
       const orderIds = [...(order.event_ids || []), ...(order.event_id ? [order.event_id] : [])];
       if (ids.size && orderIds.some((id) => ids.has(id))) return true;
       const orderTime = new Date(order.executed_at || order.created_at).getTime();
-      return Number.isFinite(planTime) && Number.isFinite(orderTime) && Math.abs(orderTime - planTime) <= 36 * 60 * 60 * 1000 && String(order.reason || "").toLowerCase() === String(plan.reason || "").toLowerCase();
+      return Number.isFinite(planTime) && Number.isFinite(orderTime)
+        && Math.abs(orderTime - planTime) <= 5 * 60 * 1000
+        && String(order.reason || "").toLowerCase() === String(plan.reason || "").toLowerCase();
     });
   };
   const rebalanceGroups = new Map();
@@ -106,15 +109,20 @@ export function PortfolioPage({ portfolios, portfolioOrders = [], loading, quote
   for (const portfolio of chartSeries) {
     const history = seriesHistory.get(portfolio.id);
     for (const plan of (rebalances?.[portfolio.id] || [])) {
-      if (plan.status === "cancelled") continue;
-      const timestamp = plan.executed_at || plan.scheduled_for || plan.decision_at || plan.created_at;
+      // Only show a chart marker once an execution timestamp and its trade
+      // records exist. Pending plans belong in the activity list, not history.
+      if (plan.status !== "filled" || !plan.executed_at) continue;
+      const timestamp = plan.executed_at;
       const index = markerForSeries(history, timestamp);
       if (index == null) continue;
       const eventIds = [...new Set([...(plan.event_ids || []), ...Object.values(plan.ticker_event_ids || {}).flat()])];
       const reason = String(plan.reason || "scheduled").toLowerCase();
       const triggerKind = portfolio.news_enabled && (reason.includes("news") || eventIds.length) ? "news-rebalance" : reason.includes("volume") || reason.includes("spike") ? "volume-spike" : "scheduled-rebalance";
       const key = `${portfolio.id}|${index}|${triggerKind}`;
-      const current = rebalanceGroups.get(key) || { timestamp: history[index].timestamp, index, seriesName: strategyName(portfolio), portfolio_id: portfolio.id, triggerKind, reasons: new Set(), orders: [], plans: [], eventIds: new Set() };
+      const current = rebalanceGroups.get(key);
+      // A filled plan with no actual order record did not change the plotted
+      // portfolio. Do not turn it into a misleading zero-trade execution mark.
+      if (!current?.orders.length) continue;
       current.plans.push(plan); current.reasons.add(plan.reason || "scheduled");
       for (const id of eventIds) current.eventIds.add(id);
       rebalanceGroups.set(key, current);
@@ -135,8 +143,7 @@ export function PortfolioPage({ portfolios, portfolioOrders = [], loading, quote
       if (order.portfolio_id !== marker.portfolio_id) return false;
       const stamp = order.executed_at || order.created_at;
       const orderIndex = markerForSeries(history, stamp);
-      const withinExecutionWindow = Math.abs(new Date(stamp).getTime() - new Date(marker.timestamp).getTime()) <= 36 * 60 * 60 * 1000;
-      return orderIndex === marker.index || withinExecutionWindow;
+      return orderIndex === marker.index;
     });
     const sameTrigger = sameSession.filter((order) => {
       const reason = String(order.reason || "").toLowerCase();
@@ -144,7 +151,7 @@ export function PortfolioPage({ portfolios, portfolioOrders = [], loading, quote
       const kind = selected?.news_enabled && (reason.includes("news") || ids.length) ? "news-rebalance" : reason.includes("volume") || reason.includes("spike") ? "volume-spike" : "scheduled-rebalance";
       return kind === marker.triggerKind;
     });
-    const orders = sameTrigger.length ? sameTrigger : sameSession;
+    const orders = sameTrigger;
     return { ...marker, orders, label: `${formatReason(marker.reason)} · ${orders.length} trade${orders.length === 1 ? "" : "s"}` };
   });
   const newsRebalanceMarkers = rebalanceMarkersWithOrders.filter((marker) => marker.triggerKind === "news-rebalance");
@@ -162,12 +169,12 @@ export function PortfolioPage({ portfolios, portfolioOrders = [], loading, quote
         <section className="panel portfolio-content"><div className="portfolio-tabs"><div className="content-tabs">{[["holdings", "Holdings"], ["performance", "Analysis"], ["activity", "Activity"], ["strategy", "Strategy"]].map(([v, label]) => <button key={v} className={tab === v ? "active" : ""} onClick={() => setTab(v)}>{label}</button>)}</div></div>
           {tab === "holdings" && <><div className="table-heading"><div><h2>Current holdings</h2><p>{positions.length} active positions <span>·</span> Click a stock to see its trade history</p></div><button className="text-button" onClick={onOrders}>View order history ↗</button></div>{rows.length ? <div className="table-scroll"><table className="data-table"><thead><tr>{[["ticker_id", "Stock"], ["last_price", "Price"], ["day_change", "Day change"], ["shares", "Shares"], ["weight", "Weight"], ["market_value", "Market value"], ["average_cost", "Avg. cost"], ["unrealized_pnl", "Unrealized P&L"]].map(([key, label]) => <th className={key === "ticker_id" ? "" : "numeric"} key={key}><button onClick={() => key !== "day_change" && changeSort(key)}>{label}{sort.key === key ? sort.direction > 0 ? " ↑" : " ↓" : ""}</button></th>)}</tr></thead><tbody>{rows.map((position) => { const symbol = tickerOf(position), quote = prices[symbol]; return <tr key={symbol} onClick={() => onTicker(symbol)} tabIndex="0" onKeyDown={(e) => e.key === "Enter" && onTicker(symbol)}><td><span className="ticker-cell"><TickerMark symbol={symbol} tickers={tickers}/><b>{symbol}</b>{quote?.sparkline?.length > 1 && <svg className={`holding-spark ${quote.change < 0 ? "dn" : "up"}`} viewBox="0 0 54 20" aria-label={`${symbol} recent price trend`}><path d={sparkPath(quote.sparkline)}/></svg>}</span></td><td className="numeric">{quote?.price != null ? money(quote.price, selected.currency) : position.last_price != null ? money(position.last_price, selected.currency) : quoteLoading ? <Skeleton variant="inline" width="48px"/> : "—"}</td><td className={`numeric ${changeClass(quote?.change)}`}>{quote?.change == null ? quoteLoading ? <Skeleton variant="inline" width="38px"/> : "—" : percent(quote.change, 2, false)}</td><td className="numeric">{number(position.shares, 0)}</td><td className="numeric">{percent(position.weight, 2)}</td><td className="numeric">{money(position.market_value, selected.currency)}</td><td className="numeric">{money(position.average_cost, selected.currency)}</td><td className={`numeric ${changeClass(position.unrealized_pnl)}`}>{money(position.unrealized_pnl, selected.currency)}</td></tr>; })}</tbody></table></div> : <div className="table-empty">No active positions in this portfolio.</div>}</>}
           {tab === "performance" && <PerformancePanel portfolio={selected}/>}
-          {tab === "activity" && <div className="activity-content"><div className="table-heading"><div><h2>Rebalance activity</h2><p>Portfolio decisions and next-session execution plans.</p></div><button className="button-secondary" disabled={rebalanceBusy || pendingPlans.length > 0} onClick={triggerRebalance}>{rebalanceBusy ? "Scheduling…" : "Run normal rebalance"}</button></div>{pendingPlans.length ? <div className="pending-callout"><i className="pending-dot"/><div className="pending-plan-content"><b>{pendingPlans.length} rebalance plan{pendingPlans.length > 1 ? "s" : ""} pending</b>{pendingPlans.map((plan) => { const trades = pendingTradePreview(plan, selected, prices); return <section className="pending-plan-card" key={plan.id}><header><b>{formatReason(plan.reason)}</b><span>Scheduled {dateTime(plan.scheduled_for)}</span></header>{trades.length ? <><div className="pending-order-list">{trades.map((trade) => <div className="pending-order-row" key={`${plan.id}-${trade.ticker}`}><span className="ticker-cell"><TickerMark symbol={trade.ticker} tickers={tickers}/><b>{trade.ticker}</b></span><span className={`side-badge ${trade.side}`}>{trade.side}</span><strong>{number(trade.shares, 0)} shares</strong><span className="pending-order-value">{trade.price ? `~${money(trade.value, selected.currency)}` : "Price unavailable"}</span></div>)}</div><small className="pending-plan-note">Estimated quantities at current reference prices; final orders may change at execution.</small></> : <p className="pending-plan-empty">No share changes are projected from this plan.</p>}</section>; })}</div></div> : <p className="empty-note">No pending rebalance plans.</p>}{selected.last_rebalanced_at && <div className="activity-item"><span className="activity-glyph">↻</span><div><b>Last rebalance</b><p>{formatReason(selected.last_rebalance_trigger || "Strategy rebalance")} · {dateTime(selected.last_rebalanced_at)}</p></div></div>}{rebalanceHistory.length > 0 && <div className="activity-history"><h3>Recent execution plans</h3>{rebalanceHistory.slice(0, 10).map((plan) => { const trades = ordersForPlan(plan); const label = plan.status === "filled" ? `Completed · ${trades.length} trade${trades.length === 1 ? "" : "s"}` : "Pending"; return <div className="activity-item" key={plan.id}><span className="activity-glyph">{plan.status === "filled" ? "✓" : "◷"}</span><div><b>{formatReason(plan.reason)} · {label}</b><p>{plan.status === "filled" ? `Executed ${dateTime(plan.executed_at || plan.scheduled_for)}` : `Scheduled ${dateTime(plan.scheduled_for)}`} · {trades.length} recorded trade{trades.length === 1 ? "" : "s"} · {(plan.event_ids || []).length} linked news events</p></div></div>; })}</div>}<button className="text-button" onClick={onOrders}>Review portfolio orders ↗</button></div>}
+          {tab === "activity" && <div className="activity-content"><div className="table-heading"><div><h2>Rebalance activity</h2><p>Portfolio decisions and next-session execution plans.</p></div><button className="button-secondary" disabled={rebalanceBusy || pendingPlans.length > 0} onClick={triggerRebalance}>{rebalanceBusy ? "Scheduling…" : "Run normal rebalance"}</button></div>{pendingPlans.length ? <div className="pending-callout"><i className="pending-dot"/><div className="pending-plan-content"><b>{pendingPlans.length} rebalance plan{pendingPlans.length > 1 ? "s" : ""} pending</b>{pendingPlans.map((plan) => { const trades = pendingTradePreview(plan, selected, prices); return <section className="pending-plan-card" key={plan.id}><header><b>{formatReason(plan.reason)}</b><span>Scheduled {dateTime(plan.scheduled_for)}</span></header>{trades.length ? <><div className="pending-order-list">{trades.map((trade) => <div className="pending-order-row" key={`${plan.id}-${trade.ticker}`}><span className="ticker-cell"><TickerMark symbol={trade.ticker} tickers={tickers}/><b>{trade.ticker}</b></span><span className={`side-badge ${trade.side}`}>{trade.side}</span><strong>{number(trade.shares, 0)} shares</strong><span className="pending-order-value">{trade.price ? `~${money(trade.value, selected.currency)}` : "Price unavailable"}</span></div>)}</div><small className="pending-plan-note">Estimated quantities at current reference prices; final orders may change at execution.</small></> : <p className="pending-plan-empty">No share changes are projected from this plan.</p>}</section>; })}</div></div> : <p className="empty-note">No pending rebalance plans.</p>}{selected.last_rebalanced_at && <div className="activity-item"><span className="activity-glyph">↻</span><div><b>Last rebalance</b><p>{formatReason(selected.last_rebalance_trigger || "Strategy rebalance")} · {dateTime(selected.last_rebalanced_at)}</p></div></div>}{rebalanceHistory.length > 0 && <div className="activity-history"><h3>Recent execution plans</h3>{rebalanceHistory.slice(0, 10).map((plan) => { const trades = ordersForPlan(plan); const label = plan.status === "filled" ? (trades.length ? `Completed · ${trades.length} trade${trades.length === 1 ? "" : "s"}` : "Completed · no recorded trades") : "Pending"; const tradeSummary = trades.length ? `${trades.length} recorded trade${trades.length === 1 ? "" : "s"}` : "No order records returned"; return <div className="activity-item" key={plan.id}><span className="activity-glyph">{plan.status === "filled" ? "✓" : "◷"}</span><div><b>{formatReason(plan.reason)} · {label}</b><p>{plan.status === "filled" ? `Executed ${dateTime(plan.executed_at || plan.scheduled_for)}` : `Scheduled ${dateTime(plan.scheduled_for)}`} · {tradeSummary} · {(plan.event_ids || []).length} linked news events</p></div></div>; })}</div>}<button className="text-button" onClick={onOrders}>Review portfolio orders ↗</button></div>}
           {tab === "strategy" && <StrategyPanel portfolio={selected}/>}
         </section>
       </>}
     </DataNotice>
-    {activeMarker && <PortfolioMarkerDrawer marker={activeMarker} portfolios={available} events={events} currency={selected?.currency} onClose={() => setActiveMarker(null)} onEvent={(event) => { setActiveMarker(null); onEvent?.(event); }} onTicker={onTicker}/>}
+    {activeMarker && <PortfolioMarkerDrawer marker={activeMarker} portfolios={available} events={events} tickers={tickers} currency={selected?.currency} onClose={() => setActiveMarker(null)} onEvent={(event) => { setActiveMarker(null); onEvent?.(event); }} onTicker={onTicker}/>}
   </>;
 }
 

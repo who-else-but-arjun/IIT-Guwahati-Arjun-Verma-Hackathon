@@ -77,9 +77,15 @@ export function WeightHistoryChart({ metrics = [], symbol, orders = [], rebalanc
     const ids = [...new Set([...(order.event_ids || []), ...(order.event_id ? [order.event_id] : [])])];
     addMarker({ date: order.executed_at || order.created_at, reason: order.reason, eventIds: ids, order }, index);
   });
-  (rebalances || []).filter((plan) => plan.status !== "cancelled").forEach((plan, index) => {
+  (rebalances || []).filter((plan) => plan.status === "filled" && plan.executed_at).forEach((plan, index) => {
     const ids = [...new Set([...(plan.event_ids || []), ...Object.values(plan.ticker_event_ids || {}).flat()])];
-    addMarker({ date: plan.executed_at || plan.scheduled_for || plan.decision_at || plan.created_at, reason: plan.reason, eventIds: ids, plan }, `plan-${index}`);
+    const timestamp = new Date(plan.executed_at).getTime();
+    const nearestIndex = rows.reduce((best, row, current) => Math.abs(new Date(row.date).getTime() - timestamp) < Math.abs(new Date(rows[best].date).getTime() - timestamp) ? current : best, 0);
+    const kind = markerKind(plan.reason, ids);
+    const marker = markerGroups.get(`${nearestIndex}|${kind}`);
+    // Execution plans with no recorded orders are not execution markers.
+    if (!marker?.orders.length) return;
+    addMarker({ date: plan.executed_at, reason: plan.reason, eventIds: ids, plan }, `plan-${index}`);
   });
   const markers = symbol ? [] : [...markerGroups.values()].map((marker) => {
     const date = rows[marker.rowIndex]?.date;

@@ -8,20 +8,21 @@ from utils.stock_utils import filter_sp100
 _TICKER_TAG = re.compile(r"(?<![A-Za-z0-9])(?:\$|#)([A-Za-z][A-Za-z0-9.-]{0,6})\b")
 _COMPANY_SUFFIX = re.compile(r"\b(?:incorporated|inc|corporation|corp|company|co|limited|ltd|plc|llc|group|holdings|holding)\b")
 _FINANCIAL_CONTEXT = re.compile(
-    r"\b(?:stock|stocks|share|shares|earnings|revenue|profit|guidance|quarter|quarterly|"
+    r"\b(?:stock|stocks|share|shares|share price|stock price|market cap|market share|"
+    r"earnings|revenue|profit|guidance|quarter|quarterly|"
     r"investor|investors|analyst|ticker|ceo|cfo|dividend|buyback|sec|nasdaq|nyse|"
     r"acquisition|merger|acquire|acquires|acquired|reported|announced|results|forecast|outlook|"
     r"lawsuit|regulatory|trading|valuation|antitrust|layoffs|restructuring|price target|"
-    r"downgrade|upgrade|rating|shares rose|shares fell|shares gain|shares drop)\b"
+    r"downgrade|upgrade|rating|shares rose|shares fell|shares gain|shares drop|top movers|"
+    r"market close|market open|quarterly results)\b"
 )
 _NOISE = re.compile(
     r"\b(?:pump\s*(?:and|&)\s*dump|airdrop|giveaway|signals?|moonshot|"
-    r"join my|dm me|follow for|copy trading|guaranteed returns|nft)\b",
+    r"join my|dm me|follow for|copy trading|guaranteed returns|nft|coupon|promo code|"
+    r"discount|limited time|shop now|free shipping|amazon deals?|product review|"
+    r"halloween decorations|pajama set|canvas painting|sale ends)\b|amazon\.com|bit\.ly/",
     re.I,
 )
-_PRICE_EVIDENCE = re.compile(r"(?:\b\d+(?:\.\d+)?\s?%|\$\s?\d+(?:\.\d+)?)")
-
-
 def _normalized_words(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
 
@@ -41,10 +42,12 @@ _COMPANY_PATTERNS = _company_patterns()
 
 def extract_sp100_symbols(text: str) -> list[str]:
     """Return S&P 100 symbols tagged or named in a financially contextual post."""
-    if not isinstance(text, str) or len(text.strip()) < 35 or _NOISE.search(text):
+    if not isinstance(text, str) or len(text.strip()) < 50 or _NOISE.search(text):
         return []
     normalized_text = _normalized_words(text)
-    if not _FINANCIAL_CONTEXT.search(normalized_text) and not _PRICE_EVIDENCE.search(text):
+    # A ticker plus a dollar figure is not enough: product ads and discount
+    # posts routinely look like price-sensitive financial news.
+    if not _FINANCIAL_CONTEXT.search(normalized_text):
         return []
     found = set()
     for match in _TICKER_TAG.finditer(text):
@@ -58,7 +61,7 @@ def extract_sp100_symbols(text: str) -> list[str]:
             found.add(symbol)
     matched = filter_sp100(found)
     # Broad lists of tags are usually promotion or low-signal chatter.
-    return matched if len(matched) <= 3 else []
+    return matched if len(matched) <= 2 else []
 
 
 def headline_from_post(post_text: str, *, limit: int = 180) -> str:

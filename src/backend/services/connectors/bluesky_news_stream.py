@@ -33,8 +33,8 @@ class BlueskyNewsStream(NewsConnector):
         self._rate_lock = threading.Lock()
         self._accepted_posts: deque[float] = deque()
         self._accepted_by_author: dict[str, deque[float]] = defaultdict(deque)
-        self._max_posts_per_hour = max(1, int(os.getenv("BLUESKY_MAX_POSTS_PER_HOUR", "12")))
-        self._max_posts_per_author_hour = max(1, int(os.getenv("BLUESKY_MAX_POSTS_PER_AUTHOR_PER_HOUR", "2")))
+        self._max_posts_per_hour = max(1, int(os.getenv("BLUESKY_MAX_POSTS_PER_HOUR", "4")))
+        self._max_posts_per_author_hour = max(1, int(os.getenv("BLUESKY_MAX_POSTS_PER_AUTHOR_PER_HOUR", "1")))
 
     def _within_rate_limit(self, author: str) -> bool:
         now = time.monotonic()
