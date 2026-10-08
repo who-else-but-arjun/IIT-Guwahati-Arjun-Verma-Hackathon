@@ -34,47 +34,58 @@ class NewsProcessingWorkflow:
         if self.repository.is_event_processed(event_id):
             return event_id
         try:
-            article_text = self.models.prepare_article_text(event.headline, event.text)
-            # Jev has a tighter provider rate limit than local model inference.
-            # Ask it first so a 429 does not also burn CPU on three local models.
-            try:
-                category, impact_score = self.jev.classify_category_and_impact(article_text)
-            except Exception as exc:
-                category, impact_score = self.models.classify_category_and_impact(article_text)
-                logger.warning("Jev unavailable for event %s (%s); category and impact came from FLANG-Laya.", event_id, type(exc).__name__)
-            sentiment_tag, sentiment_score = self.models.analyze_sentiment(article_text)
-            candidates = self.models.select_and_score_tickers(article_text)
-            relevant_tickers = [
-                RelevantTickerDTO(
-                    ticker_id=candidate.ticker_id,
-                    relevance_score=candidate.relevance_score,
-                    scored_at=event.event_datetime,
-                )
-                for candidate in candidates
-            ]
-            enriched = event.model_copy(update={
-                "category": category,
-                "sentiment": SentimentDTO(
-                    score=sentiment_score,
-                    tag=sentiment_tag,
-                    impact_score=impact_score,
-                    scored_at=event.event_datetime,
-                ),
-                "relevant_tickers": relevant_tickers,
-                "metadata": {
-                    **event.metadata,
-                    "analysis_models": "flang_roberta_classifier,flang_roberta_regressor,flang_roberta_stock_selector,flang_laya",
-                },
-            })
-            # Mark as applying, then update each ticker idempotently, and only
-            # then mark the event complete.
-            self.repository.save_news_analysis(event_id, enriched)
+            stored = self.repository.get_event_for_processing(event_id)
+            enriched = stored or event
+            already_analyzed = bool(
+                enriched.category is not None
+                and enriched.sentiment is not None
+                and enriched.metadata.get("analysis_models")
+            )
+            if not already_analyzed:
+                article_text = self.models.prepare_article_text(event.headline, event.text)
+                # Jev has a tighter provider rate limit than local model inference.
+                # Ask it first so a 429 does not also burn CPU on three local models.
+                try:
+                    category, impact_score = self.jev.classify_category_and_impact(article_text)
+                except Exception as exc:
+                    category, impact_score = self.models.classify_category_and_impact(article_text)
+                    logger.warning("Jev unavailable for event %s (%s); category and impact came from FLANG-Laya.", event_id, type(exc).__name__)
+                sentiment_tag, sentiment_score = self.models.analyze_sentiment(article_text)
+                candidates = self.models.select_and_score_tickers(article_text)
+                relevant_tickers = [
+                    RelevantTickerDTO(
+                        ticker_id=candidate.ticker_id,
+                        relevance_score=candidate.relevance_score,
+                        scored_at=event.event_datetime,
+                    )
+                    for candidate in candidates
+                ]
+                enriched = event.model_copy(update={
+                    "category": category,
+                    "sentiment": SentimentDTO(
+                        score=sentiment_score,
+                        tag=sentiment_tag,
+                        impact_score=impact_score,
+                        scored_at=event.event_datetime,
+                    ),
+                    "relevant_tickers": relevant_tickers,
+                    "metadata": {
+                        **event.metadata,
+                        "analysis_models": "flang_roberta_classifier,flang_roberta_regressor,flang_roberta_stock_selector,flang_laya",
+                    },
+                })
+                self.repository.save_news_analysis(event_id, enriched)
+            # Score updates are idempotent, so retries can safely finish a
+            # partially applied event without spending time on model inference.
             affected_symbols = self._apply_stock_updates(
                 event_id, enriched, as_of=score_time or datetime.now(timezone.utc),
             )
-            self.repository.mark_news_processing_status(event_id, "complete")
             if affected_symbols and notify_trading:
-                publish_score_update(event_id, affected_symbols)
+                if not publish_score_update(event_id, affected_symbols):
+                    raise RuntimeError("Trading service did not acknowledge the analyzed news decision.")
+            # Feed queries only return COMPLETE events; this commit therefore
+            # means model output, stock scores, and the trading decision exist.
+            self.repository.mark_news_processing_status(event_id, "complete")
             return event_id
         except Exception as exc:
             reason = f"{type(exc).__name__}: {exc}"[:500]

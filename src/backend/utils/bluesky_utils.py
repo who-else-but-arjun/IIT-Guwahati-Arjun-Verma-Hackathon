@@ -9,11 +9,17 @@ _TICKER_TAG = re.compile(r"(?<![A-Za-z0-9])(?:\$|#)([A-Za-z][A-Za-z0-9.-]{0,6})\
 _COMPANY_SUFFIX = re.compile(r"\b(?:incorporated|inc|corporation|corp|company|co|limited|ltd|plc|llc|group|holdings|holding)\b")
 _FINANCIAL_CONTEXT = re.compile(
     r"\b(?:stock|stocks|share|shares|earnings|revenue|profit|guidance|quarter|quarterly|"
-    r"investor|investors|analyst|market|ticker|ceo|cfo|dividend|buyback|sec|nasdaq|nyse|"
-    r"acquisition|merger|acquire|acquires|acquired|reports|reported|announces|announced|"
-    r"launches|launched|results|forecast|outlook|lawsuit|regulatory|trading|valuation|"
-    r"cloud|antitrust|layoffs|restructuring)\b"
+    r"investor|investors|analyst|ticker|ceo|cfo|dividend|buyback|sec|nasdaq|nyse|"
+    r"acquisition|merger|acquire|acquires|acquired|reported|announced|results|forecast|outlook|"
+    r"lawsuit|regulatory|trading|valuation|antitrust|layoffs|restructuring|price target|"
+    r"downgrade|upgrade|rating|shares rose|shares fell|shares gain|shares drop)\b"
 )
+_NOISE = re.compile(
+    r"\b(?:pump\s*(?:and|&)\s*dump|airdrop|giveaway|signals?|moonshot|"
+    r"join my|dm me|follow for|copy trading|guaranteed returns|nft)\b",
+    re.I,
+)
+_PRICE_EVIDENCE = re.compile(r"(?:\b\d+(?:\.\d+)?\s?%|\$\s?\d+(?:\.\d+)?)")
 
 
 def _normalized_words(value: str) -> str:
@@ -35,6 +41,11 @@ _COMPANY_PATTERNS = _company_patterns()
 
 def extract_sp100_symbols(text: str) -> list[str]:
     """Return S&P 100 symbols tagged or named in a financially contextual post."""
+    if not isinstance(text, str) or len(text.strip()) < 35 or _NOISE.search(text):
+        return []
+    normalized_text = _normalized_words(text)
+    if not _FINANCIAL_CONTEXT.search(normalized_text) and not _PRICE_EVIDENCE.search(text):
+        return []
     found = set()
     for match in _TICKER_TAG.finditer(text):
         tag, symbol = match.group(0), match.group(1).upper().replace("-", ".")
@@ -42,12 +53,12 @@ def extract_sp100_symbols(text: str) -> list[str]:
         # commonly means the animal, while $CAT is an explicit ticker.
         if tag.startswith("$") or len(symbol) >= 4:
             found.add(symbol)
-    normalized_text = _normalized_words(text)
-    if _FINANCIAL_CONTEXT.search(normalized_text):
-        for symbol, pattern in _COMPANY_PATTERNS:
-            if pattern.search(normalized_text):
-                found.add(symbol)
-    return filter_sp100(found)
+    for symbol, pattern in _COMPANY_PATTERNS:
+        if pattern.search(normalized_text):
+            found.add(symbol)
+    matched = filter_sp100(found)
+    # Broad lists of tags are usually promotion or low-signal chatter.
+    return matched if len(matched) <= 3 else []
 
 
 def headline_from_post(post_text: str, *, limit: int = 180) -> str:

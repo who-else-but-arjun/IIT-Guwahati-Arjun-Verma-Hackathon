@@ -102,6 +102,18 @@ def latest_completed_session(now: datetime | None = None):
     return completed.index[-1].date() if not completed.empty else None
 
 
+def current_metric_session(now: datetime | None = None):
+    """Use today's NYSE session after its open, otherwise the latest close."""
+    instant = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    local_date = instant.astimezone(NEW_YORK).date()
+    schedule = market_calendars.get_calendar("NYSE").schedule(
+        start_date=local_date, end_date=local_date,
+    )
+    if not schedule.empty and pd.Timestamp(schedule.iloc[0]["market_open"]) <= pd.Timestamp(instant):
+        return local_date
+    return latest_completed_session(instant)
+
+
 def download_universe(period: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Download adjusted closes and volume bars for the configured universe."""
     bars = download_daily_bars(SP100_TICKERS, period=period)

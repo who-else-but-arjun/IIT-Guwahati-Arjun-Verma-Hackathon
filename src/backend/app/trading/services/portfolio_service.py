@@ -28,7 +28,9 @@ from app.trading.services.strategy import (
 )
 from app.trading.constants import (GRAPH_PROPAGATION_SCALE, MAX_NEWS_TICKERS_PER_PLAN,
                                    MIN_NEWS_IMPACT_SCORE, MIN_NEWS_SENTIMENT_MAGNITUDE, SP100_TICKERS)
-from app.trading.services.market_data import download_latest_prices, download_open_prices_on, next_session_open
+from app.trading.services.market_data import (
+    NEW_YORK, current_metric_session, download_latest_prices, download_open_prices_on, next_session_open,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -486,7 +488,15 @@ class PortfolioService:
 
     def _record_daily_metrics(self, portfolio: Portfolio) -> None:
         now = datetime.now(timezone.utc)
-        prior_points = [point for point in portfolio.value_history if point.timestamp.date() < now.date()]
+        session_date = current_metric_session(now)
+        if session_date is None:
+            session_date = now.astimezone(NEW_YORK).date()
+
+        def nyse_date(value: datetime):
+            aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            return aware.astimezone(NEW_YORK).date()
+
+        prior_points = [point for point in portfolio.value_history if nyse_date(point.timestamp) < session_date]
         previous_point = prior_points[-1] if prior_points else None
         previous_value = previous_point.total_value if previous_point else portfolio.initial_capital
         total_value = portfolio.portfolio_value
@@ -497,7 +507,7 @@ class PortfolioService:
         volatility = float(np.std(daily_returns, ddof=1) * math.sqrt(252)) if len(daily_returns) > 1 else 0.0
         sharpe = float(np.mean(daily_returns) / np.std(daily_returns, ddof=1) * math.sqrt(252)) if len(daily_returns) > 1 and np.std(daily_returns, ddof=1) else 0.0
         drawdown = total_value / max(portfolio.peak_value, total_value, 1e-12) - 1.0
-        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        day_start = datetime.combine(session_date, time.min, tzinfo=NEW_YORK).astimezone(timezone.utc)
         todays_orders = self.repository.list_orders(portfolio.id, limit=10000, since=day_start)
         daily_cost = sum(order.transaction_cost for order in todays_orders)
         daily_turnover = sum(order.gross_value for order in todays_orders) / previous_value if previous_value else 0.0
@@ -519,18 +529,18 @@ class PortfolioService:
             turnover=daily_turnover,
             transaction_cost=daily_cost,
         )
-        if portfolio.daily_metrics and portfolio.daily_metrics[-1].date.date() == now.date():
-            portfolio.daily_metrics[-1] = metric
-        else:
+        metric_index = next((index for index in range(len(portfolio.daily_metrics) - 1, -1, -1)
+                             if nyse_date(portfolio.daily_metrics[index].date) == session_date), None)
+        if metric_index is None:
             portfolio.daily_metrics.append(metric)
+        else:
+            portfolio.daily_metrics[metric_index] = metric
+        portfolio.daily_metrics.sort(key=lambda point: point.date)
         portfolio.daily_metrics = portfolio.daily_metrics[-3650:]
         portfolio.peak_value = max(portfolio.peak_value, total_value)
-        if portfolio.value_history and portfolio.value_history[-1].timestamp.date() == now.date():
-            portfolio.value_history[-1].total_value = total_value
-            portfolio.value_history[-1].cash = portfolio.cash
-            portfolio.value_history[-1].invested_value = total_value - portfolio.cash
-            portfolio.value_history[-1].timestamp = now
-        else:
+        point_index = next((index for index in range(len(portfolio.value_history) - 1, -1, -1)
+                            if nyse_date(portfolio.value_history[index].timestamp) == session_date), None)
+        if point_index is None:
             from app.trading.model import PortfolioValuePoint
             portfolio.value_history.append(PortfolioValuePoint(
                 timestamp=now,
@@ -539,4 +549,12 @@ class PortfolioService:
                 invested_value=total_value - portfolio.cash,
                 benchmark_value=portfolio.benchmark_value,
             ))
+        else:
+            point = portfolio.value_history[point_index]
+            point.total_value = total_value
+            point.cash = portfolio.cash
+            point.invested_value = total_value - portfolio.cash
+            point.benchmark_value = portfolio.benchmark_value
+            point.timestamp = now
+        portfolio.value_history.sort(key=lambda point: point.timestamp)
         portfolio.value_history = portfolio.value_history[-3650:]

@@ -91,7 +91,10 @@ export function WeightHistoryChart({ metrics = [], symbol, orders = [], rebalanc
       const matching = nearby.filter((order) => markerKind(order.reason, [...(order.event_ids || []), ...(order.event_id ? [order.event_id] : [])]) === marker.kind);
       linkedOrders = matching.length ? matching : nearby;
     }
-    return { ...marker, orders: linkedOrders, timestamp: date, seriesName: series[0]?.name, kind: "rebalance", triggerKind: marker.kind, reason,
+    const plans = [...marker.plans];
+    const plan = plans.at(-1) || null;
+    return { ...marker, eventIds: [...marker.eventIds], plans, plan, pending: plan?.status === "pending",
+      orders: linkedOrders, timestamp: date, seriesName: series[0]?.name, kind: "rebalance", triggerKind: marker.kind, reason,
       events: marker.events, label: `${reason || "Portfolio rebalance"} · ${linkedOrders.length} trade${linkedOrders.length === 1 ? "" : "s"}`, offset: marker.kind === "news-rebalance" ? -5 : 5 };
   });
   const changeTickerSelection = (ticker) => setSelectedTickers((current) => {

@@ -421,6 +421,13 @@ class MongoRepository(TickerRepositoryMixin):
         """Compatibility alias for get_event."""
         return self.get_event(event_id)
 
+    def get_event_for_processing(self, event_id: str) -> NewsEventDTO | None:
+        """Load a queued or partially analyzed event for an idempotent retry."""
+        if not ObjectId.is_valid(event_id):
+            return None
+        record = self.news_events.find_one({"_id": ObjectId(event_id)})
+        return NewsEvent.model_validate(record).to_dto() if record else None
+
     @cached_read("mongo-events", 20)
     def get_events(
         self,
@@ -432,28 +439,16 @@ class MongoRepository(TickerRepositoryMixin):
         until: datetime | date | None = None,
         limit: int = 100,
         offset: int = 0,
-        include_pending: bool = False,
     ) -> list[NewsEventDTO]:
-        """Return newest-first completed stories, optionally including queued analysis."""
-        include_queued = include_pending and score_min is None and score_max is None
-        completed_query: dict[str, object] = {
+        """Return newest-first stories whose analysis and trading handoff completed."""
+        query: dict[str, object] = {
             "metadata.analysis_status": NewsAnalysisStatus.COMPLETE.value,
             "category": {"$type": "string"},
             "sentiment.score": {"$type": "number"},
             "sentiment.impact_score": {"$type": "number"},
         }
         if category is not None:
-            completed_query["category"] = category
-        query = completed_query
-        if include_queued:
-            pending_query: dict[str, object] = {"metadata.analysis_status": {"$in": [
-                NewsAnalysisStatus.QUEUED.value,
-                NewsAnalysisStatus.PENDING_ANALYSIS.value,
-                NewsAnalysisStatus.APPLYING_SCORES.value,
-            ]}}
-            if category is not None:
-                pending_query["category"] = category
-            query = {"$or": [completed_query, pending_query]}
+            query["category"] = category
         return self._query_events(query, score_min=score_min, score_max=score_max,
                                   since=since, until=until, limit=limit, offset=offset)
 
@@ -466,46 +461,30 @@ class MongoRepository(TickerRepositoryMixin):
         score_max: float | None = None,
         since: datetime | date | None = None,
         until: datetime | date | None = None,
-        include_pending: bool = False,
     ) -> int:
-        """Count completed stories, optionally including queued analysis."""
-        include_queued = include_pending and score_min is None and score_max is None
-        completed_query: dict[str, object] = {
+        """Count stories whose analysis and trading handoff completed."""
+        query: dict[str, object] = {
             "metadata.analysis_status": NewsAnalysisStatus.COMPLETE.value,
             "category": {"$type": "string"},
             "sentiment.score": {"$type": "number"},
             "sentiment.impact_score": {"$type": "number"},
         }
         if category is not None:
-            completed_query["category"] = category
-        query = completed_query
-        if include_queued:
-            pending_query: dict[str, object] = {"metadata.analysis_status": {"$in": [
-                NewsAnalysisStatus.QUEUED.value,
-                NewsAnalysisStatus.PENDING_ANALYSIS.value,
-                NewsAnalysisStatus.APPLYING_SCORES.value,
-            ]}}
-            if category is not None:
-                pending_query["category"] = category
-            query = {"$or": [completed_query, pending_query]}
+            query["category"] = category
         if score_min is not None or score_max is not None:
             score_query: dict[str, float] = {}
             if score_min is not None:
                 score_query["$gte"] = score_min
             if score_max is not None:
                 score_query["$lte"] = score_max
-            completed_query["sentiment.score"] = score_query
+            query["sentiment.score"] = score_query
         if since is not None or until is not None:
             time_query: dict[str, datetime] = {}
             if since is not None:
                 time_query["$gte"] = utc_date_boundary(since, end_of_date=False)
             if until is not None:
                 time_query["$lte"] = utc_date_boundary(until, end_of_date=True)
-            if include_queued:
-                completed_query["event_timestamp"] = time_query
-                query["$or"][1]["event_timestamp"] = time_query
-            else:
-                query["event_timestamp"] = time_query
+            query["event_timestamp"] = time_query
         return self.news_events.count_documents(query)
 
     @cached_read("mongo-ticker-events", 20)

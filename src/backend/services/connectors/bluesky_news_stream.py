@@ -6,6 +6,8 @@ import json
 import logging
 import os
 import threading
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Mapping
 from urllib.parse import urlencode
@@ -28,6 +30,27 @@ class BlueskyNewsStream(NewsConnector):
         self.base_url = url or os.getenv("BLUESKY_JETSTREAM_URL", BLUESKY_JETSTREAM_URL)
         self._stop = threading.Event()
         self._app: websocket.WebSocketApp | None = None
+        self._rate_lock = threading.Lock()
+        self._accepted_posts: deque[float] = deque()
+        self._accepted_by_author: dict[str, deque[float]] = defaultdict(deque)
+        self._max_posts_per_hour = max(1, int(os.getenv("BLUESKY_MAX_POSTS_PER_HOUR", "12")))
+        self._max_posts_per_author_hour = max(1, int(os.getenv("BLUESKY_MAX_POSTS_PER_AUTHOR_PER_HOUR", "2")))
+
+    def _within_rate_limit(self, author: str) -> bool:
+        now = time.monotonic()
+        cutoff = now - 3600
+        with self._rate_lock:
+            while self._accepted_posts and self._accepted_posts[0] <= cutoff:
+                self._accepted_posts.popleft()
+            author_posts = self._accepted_by_author[author]
+            while author_posts and author_posts[0] <= cutoff:
+                author_posts.popleft()
+            if (len(self._accepted_posts) >= self._max_posts_per_hour
+                    or len(author_posts) >= self._max_posts_per_author_hour):
+                return False
+            self._accepted_posts.append(now)
+            author_posts.append(now)
+            return True
 
     def normalize(self, event: Mapping[str, object], context: object | None = None) -> NewsEventDTO | None:
         """Map a Jetstream v1 commit event into the shared NewsEvent DTO."""
@@ -44,8 +67,12 @@ class BlueskyNewsStream(NewsConnector):
         post_text = record.get("text")
         if not isinstance(post_text, str) or not post_text.strip():
             return None
-        related = context if isinstance(context, list) else extract_sp100_symbols(post_text)
+        # Always apply the same strict relevance rules to stream posts; caller
+        # context is only a hint and must not bypass the financial-content gate.
+        related = extract_sp100_symbols(post_text)
         if not related:
+            return None
+        if not self._within_rate_limit(did):
             return None
 
         at_uri = f"at://{did}/app.bsky.feed.post/{rkey}"
