@@ -2,9 +2,9 @@
 
 ## S&P Global & Crisil Campus Hackathon
 
-**Candidate Name:** [Your Full Name]  
-**College Email ID:** [your_id@college.ac.in]  
-**College / Campus:** [Your College Name]  
+**Candidate Name:** Arjun Verma
+**College Email ID:** arjun.verma@iitg.ac.in
+**College / Campus:** IIT Guwahati
 **Demo Video Link:** [YouTube / Unlisted]  
 **Slide Deck Link (if hosted externally):** [Slide deck link, if available]
 
