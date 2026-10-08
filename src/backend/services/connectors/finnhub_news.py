@@ -9,7 +9,7 @@ import requests
 import logging
 
 from dto.news import NewsEventDTO
-from constants import FINNHUB_COMPANY_NEWS_URL
+from constants import FINNHUB_API_KEY, FINNHUB_COMPANY_NEWS_URL
 
 from .connector import NewsConnector
 from utils.news_utils import build_news_event
@@ -43,7 +43,7 @@ class FinnhubNewsConnector(NewsConnector):
 
     def __init__(self, api_key=None, session=None, timeout=20, request_interval=1.2, on_article=None, symbols=None):
         super().__init__(on_article, symbols=symbols)
-        self.api_key = api_key or os.getenv("FINNHUB_API_KEY")
+        self.api_key = api_key or os.getenv("FINNHUB_API_KEY") or FINNHUB_API_KEY
         if not self.api_key:
             raise ValueError("Set FINNHUB_API_KEY to use the Finnhub news connector.")
         self.session = session or requests.Session()

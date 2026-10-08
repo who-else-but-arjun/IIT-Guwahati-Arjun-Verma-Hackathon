@@ -9,7 +9,7 @@ from typing import Mapping
 import websocket
 
 from dto.news import NewsEventDTO
-from constants import ALPACA_NEWS_STREAM_URL
+from constants import ALPACA_NEWS_STREAM_URL, APCA_API_KEY_ID, APCA_API_SECRET_KEY
 
 from .connector import NewsConnector
 from utils.news_utils import build_news_event
@@ -39,8 +39,8 @@ class AlpacaNewsStream(NewsConnector):
 
     def __init__(self, on_article, *, api_key=None, api_secret=None, symbols=None, url=None):
         super().__init__(on_article, symbols=symbols)
-        self.api_key = api_key or os.getenv("APCA_API_KEY_ID")
-        self.api_secret = api_secret or os.getenv("APCA_API_SECRET_KEY")
+        self.api_key = api_key or os.getenv("APCA_API_KEY_ID") or APCA_API_KEY_ID
+        self.api_secret = api_secret or os.getenv("APCA_API_SECRET_KEY") or APCA_API_SECRET_KEY
         if not self.api_key or not self.api_secret:
             raise ValueError("Set APCA_API_KEY_ID and APCA_API_SECRET_KEY to use Alpaca news streaming.")
         self.url = url or ALPACA_NEWS_STREAM_URL

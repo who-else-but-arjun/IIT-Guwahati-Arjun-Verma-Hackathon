@@ -42,9 +42,6 @@ services:
       MONGO_URI: mongodb://mongo:27017
       MONGO_DATABASE: financial_nlp
       REDIS_URL: redis://redis:6379/0
-      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
-      APCA_API_KEY_ID: ${APCA_API_KEY_ID:-}
-      APCA_API_SECRET_KEY: ${APCA_API_SECRET_KEY:-}
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
       NLP_TRADING_SOCKET_HOST: trading
       NLP_TRADING_SOCKET_PORT: 8765
@@ -102,8 +99,6 @@ services:
       MONGO_URI: mongodb://mongo:27017
       MONGO_DATABASE: financial_nlp
       REDIS_URL: redis://redis:6379/0
-      APCA_API_KEY_ID: ${APCA_API_KEY_ID:-}
-      APCA_API_SECRET_KEY: ${APCA_API_SECRET_KEY:-}
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
       NLP_TRADING_SOCKET_HOST: trading
       NLP_TRADING_SOCKET_PORT: 8765
@@ -166,7 +161,6 @@ services:
       MONGO_URI: mongodb://mongo:27017
       MONGO_DATABASE: financial_nlp
       REDIS_URL: redis://redis:6379/0
-      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
       OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
       NLP_TRADING_SOCKET_HOST: trading
       NLP_TRADING_SOCKET_PORT: 8765

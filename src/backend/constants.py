@@ -25,6 +25,12 @@ JEV_MAX_RETRIES = 2
 JEV_TIMEOUT_SECONDS = 90.0
 ALPACA_NEWS_STREAM_URL = "wss://stream.data.alpaca.markets/v1beta1/news"
 FINNHUB_COMPANY_NEWS_URL = "https://finnhub.io/api/v1/company-news"
+
+# Provider credentials are intentionally configured here for this deployment.
+FINNHUB_API_KEY = 'db16ms9r01qhkqh8g6c0db16ms9r01qhkqh8g6cg'
+APCA_API_KEY_ID = 'PKVLQTXHHUHMHAOYXC7SRFCIES'
+APCA_API_SECRET_KEY = 'FrKtqrc8pRrHTs5X2gzmRX6LF4ypnX9XTSzBknpvLW9f'
+
 BLUESKY_JETSTREAM_URL = "wss://jetstream2.us-east.bsky.network/subscribe"
 
 
