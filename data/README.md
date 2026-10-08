@@ -1,5 +1,7 @@
 # Financial NLP benchmark datasets
 
+This document describes optional local benchmark datasets used by the training notebooks. The large CSV files under `data/benchmarks/` are intentionally excluded from the deployment repository; they are not required to run the website or restore its MongoDB seed. Obtain the datasets from their cited sources and check their reuse terms before downloading or redistributing them.
+
 This folder contains four curated benchmark datasets in CSV format for financial sentiment classification, sentiment regression, and ticker/entity linking. The four datasets are:
 
 1. Financial PhraseBank (`financial_phrasebank_dataset/`)

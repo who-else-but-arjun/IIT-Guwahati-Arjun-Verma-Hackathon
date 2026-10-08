@@ -75,7 +75,7 @@ The deployment repository intentionally excludes local `.kilo` worktrees and the
 - `src/backend/services/`: news connectors, model loading, analysis workflow, and Mongo repositories.
 - `src/backend/app/trading/`: paper-trading API, live engine, market-data and historical replay.
 - `src/frontend/`: Vite + React dashboard.
-- `data/`: benchmark datasets and the MongoDB first-run snapshot.
+- `data/`: MongoDB seed snapshot, connector examples, and benchmark documentation. Optional large benchmark CSVs are kept outside the deployment repository.
 - `notebooks/`: model-training experiments.
 
 For research and provider/schema details, see `data/README.md` and `notebooks/final/README.md`.
