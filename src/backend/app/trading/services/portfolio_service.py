@@ -496,6 +496,10 @@ class PortfolioService:
             aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
             return aware.astimezone(NEW_YORK).date()
 
+        def utc_key(value: datetime):
+            aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            return aware.astimezone(timezone.utc)
+
         prior_points = [point for point in portfolio.value_history if nyse_date(point.timestamp) < session_date]
         previous_point = prior_points[-1] if prior_points else None
         previous_value = previous_point.total_value if previous_point else portfolio.initial_capital
@@ -535,7 +539,7 @@ class PortfolioService:
             portfolio.daily_metrics.append(metric)
         else:
             portfolio.daily_metrics[metric_index] = metric
-        portfolio.daily_metrics.sort(key=lambda point: point.date)
+        portfolio.daily_metrics.sort(key=lambda point: utc_key(point.date))
         portfolio.daily_metrics = portfolio.daily_metrics[-3650:]
         portfolio.peak_value = max(portfolio.peak_value, total_value)
         point_index = next((index for index in range(len(portfolio.value_history) - 1, -1, -1)
@@ -556,5 +560,5 @@ class PortfolioService:
             point.invested_value = total_value - portfolio.cash
             point.benchmark_value = portfolio.benchmark_value
             point.timestamp = now
-        portfolio.value_history.sort(key=lambda point: point.timestamp)
+        portfolio.value_history.sort(key=lambda point: utc_key(point.timestamp))
         portfolio.value_history = portfolio.value_history[-3650:]

@@ -77,6 +77,21 @@ def run_portfolio_engine() -> None:
         try:
             with PORTFOLIO_STATE_LOCK:
                 if not initialized:
+                    migration_id = "daily-position-weights-backfill-v1"
+                    if not service.repository.migrations.find_one({"_id": migration_id}):
+                        logger.info("Backfilling missing historical portfolio weights; this may take a few minutes.")
+                        try:
+                            from scripts.backfill_position_weights import backfill_missing_position_weights
+
+                            result = backfill_missing_position_weights(service.repository, apply=True)
+                            service.repository.migrations.insert_one({
+                                "_id": migration_id,
+                                "completed_at": datetime.now(ZoneInfo("UTC")),
+                                **result,
+                            })
+                            logger.info("Historical portfolio weights backfill completed: %s", result)
+                        except Exception:
+                            logger.exception("Historical portfolio weights backfill failed; it will retry on restart.")
                     service.process_due_rebalances()
                     portfolio, days, orders = service.initialize_live_portfolio()
                     initialized = True

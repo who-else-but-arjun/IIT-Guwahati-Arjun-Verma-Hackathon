@@ -89,6 +89,12 @@ class MongoRepository(TickerRepositoryMixin):
 
     def ensure_indexes(self) -> None:
         self.news_events.create_index([("event_timestamp", DESCENDING)], name="news_datetime")
+        self.news_events.create_index(
+            [("metadata.analysis_status", ASCENDING),
+             ("metadata.analysis_updated_at", DESCENDING),
+             ("event_timestamp", DESCENDING)],
+            name="news_latest_analyzed",
+        )
         expected_pending_key = {"metadata.analysis_status": ASCENDING, "event_timestamp": ASCENDING}
         for existing in self.news_events.list_indexes():
             if existing.get("name") == "news_pending_analysis" and dict(existing["key"]) != expected_pending_key:
@@ -549,7 +555,10 @@ class MongoRepository(TickerRepositoryMixin):
                     raise ValueError("since must be earlier than or equal to until")
             query["event_timestamp"] = time_query
 
-        cursor = self.news_events.find(query).sort("event_timestamp", DESCENDING)
+        cursor = self.news_events.find(query).sort([
+            ("metadata.analysis_updated_at", DESCENDING),
+            ("event_timestamp", DESCENDING),
+        ])
         as_of = datetime.now(timezone.utc)
         matches: list[NewsEventDTO] = []
         skipped = 0

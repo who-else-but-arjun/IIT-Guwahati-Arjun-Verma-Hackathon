@@ -483,12 +483,17 @@ html:hover{scrollbar-color:#a9adb477 transparent}
 .ledger-table-wrap .data-table,
 .order-table-wrap .data-table { width: 100%; }
 .ticker-mark { position: relative; }
-.ticker-mark .ticker-mark-fallback { display: none; }
-.ticker-mark.logo-failed .ticker-mark-fallback {
+.ticker-mark .ticker-mark-fallback {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
+  z-index: 0;
+}
+.ticker-mark img {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 :root[data-theme="dark"] .order-table-wrap .orders-table tbody tr { background: transparent; }
 :root[data-theme="dark"] .order-table-wrap .orders-table tbody tr:hover { background: #252629; }

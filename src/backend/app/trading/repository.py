@@ -65,6 +65,7 @@ class TradingRepository:
         self.tickers = database["tickers"]
         self.news_events = database["news_events"]
         self.pending_rebalances = database["trading_pending_rebalances"]
+        self.migrations = database["trading_migrations"]
         # This repository is opened for every API request. Keep index setup and
         # the one-off retention sweep out of the hot path after process start.
         global _orders_retention_checked, _repository_setup_complete

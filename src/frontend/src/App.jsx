@@ -33,7 +33,7 @@ export default function App() {
   }, []);
   const graphLoader = useCallback(async () => (await api.tickers()).tickers || [], []);
   const universeLoader = useCallback(async () => (await api.tickerUniverse()).tickers || [], []);
-  const eventsState = usePolling(eventsLoader, 30_000, [eventsLoader], "latest-analyzed-news-v4");
+  const eventsState = usePolling(eventsLoader, 30_000, [eventsLoader], "latest-analyzed-news-v5");
   const listedState = usePolling(portfolioLoader, 90_000, [portfolioLoader], "portfolios");
   const healthState = usePolling(healthLoader, 30_000, [healthLoader]);
   const graphState = usePolling(graphLoader, 180_000, [graphLoader], "ticker-graph");

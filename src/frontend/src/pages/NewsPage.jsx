@@ -5,6 +5,7 @@ import { DataNotice, PageHeading, PagePagination, SentimentMeter, Skeleton, Tick
 
 const label = (value) => (value || "Uncategorized").replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const analyzed = (event) => analysisStatus(event) === "complete";
+const analyzedAt = (event) => event.metadata?.analysis_updated_at || eventTime(event);
 function CategoryIcon({ category }) {
   const value = String(category || "").toLowerCase();
   const paths = /macro|economic|monetary|inflation|employment|rates|policy|gdp|cpi/.test(value)
@@ -45,7 +46,7 @@ export function NewsPage({ events = [], totalEvents, loading, quoteLoading = fal
     const text = `${cleanText(event.headline)} ${cleanText(event.text)} ${tickerText}`.toLowerCase();
     const score = event.sentiment?.score, time = new Date(eventTime(event)).getTime();
     return (!query || text.includes(query.toLowerCase())) && (!category || event.category === category) && (!source || (event.metadata?.source || event.metadata?.provider) === source) && (!sentiment || (score != null && (sentiment === "positive" ? score > 0.1 : sentiment === "negative" ? score < -0.1 : Math.abs(score) <= 0.1))) && (!age || !Number.isFinite(time) || Date.now() - time <= Number(age) * 60_000);
-  }).sort((a, b) => new Date(eventTime(b)) - new Date(eventTime(a))), [events, query, category, sentiment, source, age]);
+  }).sort((a, b) => new Date(analyzedAt(b)) - new Date(analyzedAt(a)) || new Date(eventTime(b)) - new Date(eventTime(a))), [events, query, category, sentiment, source, age]);
   const affected = useMemo(() => {
     const map = new Map();
     for (const event of analyzedEvents) for (const item of affectedTickers(event)) {
@@ -88,7 +89,7 @@ export function NewsPage({ events = [], totalEvents, loading, quoteLoading = fal
   };
   return <>
     <PageHeading kicker="LIVE NEWS & MARKET INTELLIGENCE" title="Market Pulse" description="News headlines with recorded sentiment, affected tickers, and market prices." actions={<span className="updated-label"><i className="dot up"/> {updatedAt ? `Updated ${timeAgo(updatedAt)}` : "Waiting for feed"}</span>} />
-    <div className="feed-heading"><div><span className="live-badge"><i/> LIVE WIRE</span><span className="feed-count">{events.length.toLocaleString()} loaded · {analyzedEvents.length.toLocaleString()} analyzed · {Math.max(0, events.length - analyzedEvents.length).toLocaleString()} processing</span></div><span className="m">{loading ? "Refreshing feed…" : "Newest stories first · analysis status shown on each item"}</span></div>
+    <div className="feed-heading"><div><span className="live-badge"><i/> LIVE WIRE</span><span className="feed-count">{events.length.toLocaleString()} loaded · {analyzedEvents.length.toLocaleString()} analyzed · {Math.max(0, events.length - analyzedEvents.length).toLocaleString()} processing</span></div><span className="m">{loading ? "Refreshing feed…" : "Newest analyzed stories first · source time shown on each item"}</span></div>
     <section className="filters" aria-label="News filters"><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Search headlines or ticker" aria-label="Search headlines or tickers"/><select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }} aria-label="Category"><option value="">All categories</option>{categories.map((item) => <option key={item} value={item}>{label(item)}</option>)}</select><select value={sentiment} onChange={(event) => { setSentiment(event.target.value); setPage(1); }} aria-label="Sentiment"><option value="">All sentiment</option><option value="positive">Positive</option><option value="neutral">Neutral</option><option value="negative">Negative</option></select><select value={source} onChange={(event) => { setSource(event.target.value); setPage(1); }} aria-label="Source"><option value="">All sources</option>{sources.map((item) => <option key={item}>{item}</option>)}</select><select value={age} onChange={(event) => { setAge(event.target.value); setPage(1); }} aria-label="Time range"><option value="">Any time</option><option value="60">Last hour</option><option value="240">Last 4 hours</option><option value="1440">Last 24 hours</option></select></section>
     <div className="cols"><section className="feed-column"><DataNotice skeleton="stories" loading={loading && !events.length} error={error && !events.length ? error : ""} onRetry={refresh} empty={!stories.length && !hasMore ? events.length ? "No stories match these filters." : "No news events are available from the service." : null}>
       {pageStories.map((event, index) => {
