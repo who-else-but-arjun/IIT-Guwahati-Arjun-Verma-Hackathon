@@ -95,6 +95,12 @@ class MongoRepository(TickerRepositoryMixin):
              ("event_timestamp", DESCENDING)],
             name="news_latest_analyzed",
         )
+        self.news_events.create_index(
+            [("metadata.analysis_status", ASCENDING),
+             ("sentiment.impact_score", DESCENDING),
+             ("event_timestamp", DESCENDING)],
+            name="news_high_impact",
+        )
         expected_pending_key = {"metadata.analysis_status": ASCENDING, "event_timestamp": ASCENDING}
         for existing in self.news_events.list_indexes():
             if existing.get("name") == "news_pending_analysis" and dict(existing["key"]) != expected_pending_key:
@@ -492,6 +498,45 @@ class MongoRepository(TickerRepositoryMixin):
                 time_query["$lte"] = utc_date_boundary(until, end_of_date=True)
             query["event_timestamp"] = time_query
         return self.news_events.count_documents(query)
+
+    @cached_read("mongo-event-summary", 20)
+    def event_summary(self) -> dict[str, int]:
+        """Count all stored stories and the analysis states shown by the feed."""
+        analyzed_query = {
+            "metadata.analysis_status": NewsAnalysisStatus.COMPLETE.value,
+            "category": {"$type": "string"},
+            "sentiment.score": {"$type": "number"},
+            "sentiment.impact_score": {"$type": "number"},
+        }
+        queued_query = {"metadata.analysis_status": {"$in": [
+            NewsAnalysisStatus.QUEUED.value,
+            NewsAnalysisStatus.PENDING_ANALYSIS.value,
+            NewsAnalysisStatus.APPLYING_SCORES.value,
+        ]}}
+        database_count = self.news_events.count_documents({})
+        analyzed_count = self.news_events.count_documents(analyzed_query)
+        queued_count = self.news_events.count_documents(queued_query)
+        return {
+            "database_count": database_count,
+            "analyzed_count": analyzed_count,
+            "queued_count": queued_count,
+            "other_count": max(0, database_count - analyzed_count - queued_count),
+        }
+
+    @cached_read("mongo-high-impact-events", 20)
+    def get_high_impact_events(self, *, limit: int = 3, threshold: float = 0.75) -> list[NewsEventDTO]:
+        """Return all-time top stored model impact scores, including older seed stories."""
+        query = {
+            "metadata.analysis_status": NewsAnalysisStatus.COMPLETE.value,
+            "category": {"$type": "string"},
+            "sentiment.score": {"$type": "number"},
+            "sentiment.impact_score": {"$gte": threshold},
+        }
+        rows = self.news_events.find(query).sort([
+            ("sentiment.impact_score", DESCENDING),
+            ("event_timestamp", DESCENDING),
+        ]).limit(limit)
+        return [NewsEvent.model_validate(row).to_dto() for row in rows]
 
     @cached_read("mongo-ticker-events", 20)
     def get_ticker_events(

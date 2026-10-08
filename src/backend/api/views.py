@@ -84,6 +84,11 @@ def get_events(request: HttpRequest) -> JsonResponse:
             until=until,
         )
         return JsonResponse({"count": len(events), "total_count": total_count,
+                             "analysis_summary": repository.event_summary(),
+                             "high_impact_events": [
+                                 event.model_dump(mode="json")
+                                 for event in repository.get_high_impact_events()
+                             ],
                              "offset": offset, "limit": limit,
                              "has_more": offset + len(events) < total_count, "events": [
             event.model_dump(mode="json") for event in events
