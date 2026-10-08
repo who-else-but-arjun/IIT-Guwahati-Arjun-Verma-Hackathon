@@ -62,29 +62,38 @@ def backfill_recent_position_weights(repo: TradingRepository, *, apply: bool = F
         metrics_by_day[session_date(metric.date)].append(metric)
 
     dates = sorted({session_date(metric.date) for metric in missing})
+    missing_dates = set(dates)
+    rewind_dates = sorted({
+        session_date(metric.date)
+        for metric in portfolio.daily_metrics
+        if start_date <= session_date(metric.date) <= end_date
+    } | {
+        day for day in orders_by_day if start_date <= day <= end_date
+    })
     calculated: dict[date, dict[str, float]] = {}
     checks = []
-    for day in reversed(dates):
-        prices = close_by_date.get(day, {})
-        shares = {}
-        missing_prices = []
-        for ticker, quantity in current_shares.items():
-            if quantity <= 0:
-                continue
-            price = prices.get(ticker)
-            if price is None:
-                missing_prices.append(ticker)
+    for day in reversed(rewind_dates):
+        if day in missing_dates:
+            prices = close_by_date.get(day, {})
+            shares = {}
+            missing_prices = []
+            for ticker, quantity in current_shares.items():
+                if quantity <= 0:
+                    continue
+                price = prices.get(ticker)
+                if price is None:
+                    missing_prices.append(ticker)
+                else:
+                    shares[ticker] = quantity
+            expected = invested_by_day.get(day)
+            market_value = sum(shares[ticker] * prices[ticker] for ticker in shares)
+            error = abs(market_value - expected) / expected if expected else float("inf")
+            if missing_prices or not expected or error > 0.025:
+                checks.append((day, "SKIP", round(error * 100, 2), len(shares), missing_prices[:4]))
             else:
-                shares[ticker] = quantity
-        expected = invested_by_day.get(day)
-        market_value = sum(shares[ticker] * prices[ticker] for ticker in shares)
-        error = abs(market_value - expected) / expected if expected else float("inf")
-        if missing_prices or not expected or error > 0.025:
-            checks.append((day, "SKIP", round(error * 100, 2), len(shares), missing_prices[:4]))
-        else:
-            total_value = max(metric.portfolio_value for metric in metrics_by_day[day])
-            calculated[day] = {ticker: shares[ticker] * prices[ticker] / total_value for ticker in shares if shares[ticker] * prices[ticker] > 0}
-            checks.append((day, "READY", round(error * 100, 2), len(calculated[day]), []))
+                total_value = max(metric.portfolio_value for metric in metrics_by_day[day])
+                calculated[day] = {ticker: shares[ticker] * prices[ticker] / total_value for ticker in shares if shares[ticker] * prices[ticker] > 0}
+                checks.append((day, "READY", round(error * 100, 2), len(calculated[day]), []))
 
         for order in reversed(orders_by_day.get(day, [])):
             ticker = str(order["ticker_id"]).upper()
