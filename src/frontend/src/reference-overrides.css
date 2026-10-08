@@ -780,7 +780,9 @@ html:hover{scrollbar-color:#a9adb477 transparent}
 :root[data-theme="dark"] .graph-controls { background: color-mix(in srgb, #171819 94%, transparent); border-color: #393b40; }
 
 @media (max-width: 760px) {
-  .universe-canvas-wrap { min-height: 760px; height: 82vh; }
+  /* Keep the map sized to the phone viewport. The old 760px minimum overrode
+     the viewport height and left a large empty tail beneath the graph. */
+  .universe-canvas-wrap { min-height: 0; height: clamp(360px, 68vh, 620px); height: clamp(360px, 68svh, 620px); }
   .universe-overlay-toolbar { top: 10px; left: 10px; right: 10px; flex-wrap: wrap; }
   .universe-overlay-toolbar .universe-search { flex: 1 1 100%; max-width: none; }
   .graph-controls { top: 100px; left: 10px; right: 10px; bottom: auto; width: auto; max-height: 205px; }
@@ -1316,4 +1318,11 @@ canvas:focus-visible,
 @media (max-width: 720px) {
   .run { position: relative; z-index: 70; overflow: hidden; isolation: isolate; }
   .rt button, .rt .rh { color: #fff; }
+}
+
+/* On phones, tables should add only their actual content height. Reserving
+   desktop-sized table space leaves a blank scroll region on short result sets. */
+@media (max-width: 760px) {
+  .ledger-table-wrap,
+  .order-table-wrap { min-height: 0 !important; }
 }
