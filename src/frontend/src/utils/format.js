@@ -8,7 +8,12 @@ export const percent = (value, digits = 2, isRatio = true) => value == null || !
 export const signed = (value, digits = 2) => value == null || !Number.isFinite(Number(value)) ? "—" : `${Number(value) >= 0 ? "+" : "−"}${Math.abs(Number(value)).toFixed(digits)}`;
 export const dateTime = (value) => {
   if (!value) return "—";
-  const timestamp = new Date(value);
+  // PyMongo returns stored UTC datetimes as naive values. Treat ISO strings
+  // without an explicit zone as UTC so browsers do not show UTC wall time as
+  // the user's local time (e.g. 13:30 UTC appearing as 13:30 in India).
+  const normalized = typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)
+    && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? `${value}Z` : value;
+  const timestamp = new Date(normalized);
   return Number.isFinite(timestamp.getTime()) ? timestamp.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "Time unavailable";
 };
 export const timeAgo = (value) => {
