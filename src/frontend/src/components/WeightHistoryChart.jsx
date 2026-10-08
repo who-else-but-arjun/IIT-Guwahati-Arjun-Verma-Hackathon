@@ -5,6 +5,12 @@ import { TickerMark } from "./AppShell";
 
 const colors = ["#df3038", "#167b60", "#3768a5", "#b77b20", "#7b55a3", "#238997", "#b34f7d", "#6d747e"];
 const ranges = [["1m", "1M"], ["3m", "3M"], ["1y", "1Y"], ["max", "ALL"]];
+const sessionDateKey = (value) => {
+  const timestamp = new Date(value);
+  return Number.isFinite(timestamp.getTime())
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(timestamp)
+    : "";
+};
 
 export function WeightHistoryChart({ metrics = [], symbol, orders = [], rebalances = [], events = [], onEvent, onMarker, height = 220, tickers = [], positions = [], portfolios = [], activePortfolioId, newsEnabled = false, onPortfolioChange }) {
   const [range, setRange] = useState("3m");
@@ -18,8 +24,9 @@ export function WeightHistoryChart({ metrics = [], symbol, orders = [], rebalanc
     const byDate = new Map();
     for (const row of metrics || []) {
       if (!row?.date || !row.position_weights || !Object.keys(row.position_weights).length) continue;
-      const key = new Date(row.date).toISOString().slice(0, 10);
-      byDate.set(key, row);
+      const key = sessionDateKey(row.date);
+      const previous = byDate.get(key);
+      if (!previous || new Date(row.date).getTime() >= new Date(previous.date).getTime()) byDate.set(key, row);
     }
     return [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, row]) => row);
   }, [metrics]);
@@ -83,15 +90,13 @@ export function WeightHistoryChart({ metrics = [], symbol, orders = [], rebalanc
     const nearestIndex = rows.reduce((best, row, current) => Math.abs(new Date(row.date).getTime() - timestamp) < Math.abs(new Date(rows[best].date).getTime() - timestamp) ? current : best, 0);
     const kind = markerKind(plan.reason, ids);
     const marker = markerGroups.get(`${nearestIndex}|${kind}`);
-    // Execution plans with no recorded orders are not execution markers.
-    if (!marker?.orders.length) return;
     addMarker({ date: plan.executed_at, reason: plan.reason, eventIds: ids, plan }, `plan-${index}`);
   });
   const markers = symbol ? [] : [...markerGroups.values()].map((marker) => {
     const date = rows[marker.rowIndex]?.date;
     const reason = [...marker.reasons].join(", ");
     let linkedOrders = marker.orders;
-    if (!linkedOrders.length && date) {
+    if (!linkedOrders.length && date && !marker.plans.some((item) => item.status === "filled" && item.executed_at)) {
       const when = new Date(date).getTime();
       const nearby = (orders || []).filter((order) => Math.abs(new Date(order.executed_at || order.created_at).getTime() - when) <= 36 * 60 * 60 * 1000);
       const matching = nearby.filter((order) => markerKind(order.reason, [...(order.event_ids || []), ...(order.event_id ? [order.event_id] : [])]) === marker.kind);

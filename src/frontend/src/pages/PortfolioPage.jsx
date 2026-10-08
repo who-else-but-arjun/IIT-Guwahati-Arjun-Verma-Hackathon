@@ -9,7 +9,26 @@ import { changeClass, dateTime, formatReason, impactScore, money, number, percen
 
 const strategyName = (p) => p.news_enabled ? "News + Normal Rebalancing" : "Normal Rebalancing";
 const dateKey = (value) => value ? new Date(value).toISOString().slice(0, 10) : "";
+const nyseSessionKey = (value) => {
+  if (!value) return "";
+  const timestamp = new Date(value);
+  if (!Number.isFinite(timestamp.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(timestamp);
+};
 const metricValue = (metric, mode) => mode === "value" ? metric.portfolio_value : mode === "return" ? Number(metric.cumulative_return || 0) * 100 : Number(metric.drawdown || 0) * 100;
+const normalizedHistory = (portfolio, mode) => {
+  const history = mode === "value" ? portfolio.value_history : portfolio.daily_metrics;
+  const bySession = new Map();
+  for (const item of Array.isArray(history) ? history : []) {
+    const timestamp = item.timestamp || item.date;
+    const session = nyseSessionKey(timestamp);
+    const value = mode === "value" ? item.total_value : metricValue(item, mode);
+    if (!session || !Number.isFinite(Number(value))) continue;
+    const current = bySession.get(session);
+    if (!current || new Date(timestamp).getTime() >= new Date(current.timestamp).getTime()) bySession.set(session, { timestamp, value: Number(value), session });
+  }
+  return [...bySession.values()].sort((a, b) => a.session.localeCompare(b.session));
+};
 const sparkPath = (values = []) => {
   if (values.length < 2) return "";
   const low = Math.min(...values), span = Math.max(...values) - low || 1;
@@ -51,8 +70,7 @@ export function PortfolioPage({ portfolios, portfolioOrders = [], loading, quote
   const available = Array.isArray(portfolios) ? portfolios.filter(Boolean) : [];
   const selected = available.find((p) => p.id === selectedId) || available.find((p) => p.news_enabled) || available[0];
   const series = useMemo(() => selected ? (compareBoth ? available : [selected]).map((portfolio) => {
-    const history = mode === "value" ? portfolio.value_history : portfolio.daily_metrics;
-    const normalized = (Array.isArray(history) ? history : []).map((item) => ({ timestamp: item.timestamp || item.date, value: mode === "value" ? item.total_value : metricValue(item, mode) })).filter((x) => x.timestamp && Number.isFinite(Number(x.value)));
+    const normalized = normalizedHistory(portfolio, mode);
     const days = range === "1m" ? 31 : range === "3m" ? 93 : range === "1y" ? 366 : Infinity;
     const cutoff = Date.now() - days * 86400000;
     return { name: strategyName(portfolio), color: portfolio.news_enabled ? "#df3038" : "#17191e", data: normalized.filter((point) => new Date(point.timestamp).getTime() >= cutoff) };
@@ -63,7 +81,7 @@ export function PortfolioPage({ portfolios, portfolioOrders = [], loading, quote
   const pendingPlans = Array.isArray(pending?.[selected?.id]) ? pending[selected.id] : [];
   const rebalanceHistory = Array.isArray(rebalances?.[selected?.id]) ? rebalances[selected.id] : [];
   const chartSeries = compareBoth ? available : selected ? [selected] : [];
-  const seriesHistory = new Map(chartSeries.map((portfolio) => [portfolio.id, (Array.isArray(mode === "value" ? portfolio.value_history : portfolio.daily_metrics) ? (mode === "value" ? portfolio.value_history : portfolio.daily_metrics) : []).map((item) => ({ timestamp: item.timestamp || item.date, value: mode === "value" ? item.total_value : metricValue(item, mode) })).filter((point) => point.timestamp && Number.isFinite(Number(point.value))).filter((point) => {
+  const seriesHistory = new Map(chartSeries.map((portfolio) => [portfolio.id, normalizedHistory(portfolio, mode).filter((point) => {
     const days = range === "1m" ? 31 : range === "3m" ? 93 : range === "1y" ? 366 : Infinity;
     return new Date(point.timestamp).getTime() >= Date.now() - days * 86400000;
   })]));
@@ -119,10 +137,9 @@ export function PortfolioPage({ portfolios, portfolioOrders = [], loading, quote
       const reason = String(plan.reason || "scheduled").toLowerCase();
       const triggerKind = portfolio.news_enabled && (reason.includes("news") || eventIds.length) ? "news-rebalance" : reason.includes("volume") || reason.includes("spike") ? "volume-spike" : "scheduled-rebalance";
       const key = `${portfolio.id}|${index}|${triggerKind}`;
-      const current = rebalanceGroups.get(key);
-      // A filled plan with no actual order record did not change the plotted
-      // portfolio. Do not turn it into a misleading zero-trade execution mark.
-      if (!current?.orders.length) continue;
+      const current = rebalanceGroups.get(key) || { timestamp: history[index].timestamp, index, seriesName: strategyName(portfolio), portfolio_id: portfolio.id, triggerKind, reasons: new Set(), orders: [], plans: [], eventIds: new Set() };
+      // Keep completed plan evaluations visible even when the target already
+      // matched the holdings and the execution correctly produced no orders.
       current.plans.push(plan); current.reasons.add(plan.reason || "scheduled");
       for (const id of eventIds) current.eventIds.add(id);
       rebalanceGroups.set(key, current);

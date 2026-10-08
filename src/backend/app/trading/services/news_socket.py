@@ -92,6 +92,55 @@ def run_portfolio_engine() -> None:
                             logger.info("Historical portfolio weights backfill completed: %s", result)
                         except Exception:
                             logger.exception("Historical portfolio weights backfill failed; it will retry on restart.")
+                    repair_id = "daily-position-weights-repair-v2"
+                    if not service.repository.migrations.find_one({"_id": repair_id}):
+                        logger.info("Repairing recent saved weights and duplicate daily chart snapshots.")
+                        try:
+                            from datetime import timezone
+                            def session_day(value):
+                                aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+                                return aware.astimezone(new_york).date()
+
+                            deduped = 0
+                            for saved in service.repository.list_portfolios():
+                                metrics = {}
+                                for item in sorted(saved.daily_metrics, key=lambda row: row.date):
+                                    key = session_day(item.date)
+                                    previous = metrics.get(key)
+                                    if previous and not item.position_weights and previous.position_weights:
+                                        item.position_weights = dict(previous.position_weights)
+                                    metrics[key] = item
+                                values = {}
+                                for item in sorted(saved.value_history, key=lambda row: row.timestamp):
+                                    values[session_day(item.timestamp)] = item
+                                changed = len(metrics) != len(saved.daily_metrics) or len(values) != len(saved.value_history)
+                                deduped += len(saved.daily_metrics) - len(metrics) + len(saved.value_history) - len(values)
+                                saved.daily_metrics = sorted(metrics.values(), key=lambda row: row.date)
+                                saved.value_history = sorted(values.values(), key=lambda row: row.timestamp)
+                                if changed:
+                                    service.repository.save_portfolio(saved)
+
+                            from scripts.backfill_recent_position_weights import backfill_recent_position_weights
+
+                            repaired_weights = backfill_recent_position_weights(service.repository, apply=True)
+                            unresolved_weights = any(
+                                portfolio.news_enabled and not metric.position_weights
+                                for portfolio in service.repository.list_portfolios()
+                                for metric in portfolio.daily_metrics
+                                if session_day(metric.date).isoformat() >= "2026-09-09"
+                            )
+                            if unresolved_weights:
+                                logger.warning("Some recent weight rows did not pass market-value validation; repair will retry after restart.")
+                            else:
+                                service.repository.migrations.insert_one({
+                                    "_id": repair_id,
+                                    "completed_at": datetime.now(ZoneInfo("UTC")),
+                                    "deduplicated_snapshots": deduped,
+                                    "validated_weight_dates": repaired_weights,
+                                })
+                                logger.info("Portfolio history repair completed: duplicate_snapshots=%s validated_weight_dates=%s", deduped, repaired_weights)
+                        except Exception:
+                            logger.exception("Portfolio history repair failed; it will retry on restart.")
                     service.process_due_rebalances()
                     portfolio, days, orders = service.initialize_live_portfolio()
                     initialized = True

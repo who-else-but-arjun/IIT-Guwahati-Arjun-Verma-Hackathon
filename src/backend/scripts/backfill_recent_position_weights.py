@@ -8,36 +8,38 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from bson import ObjectId
 from app.trading.repository import TradingRepository
 from app.trading.services.market_data import download_daily_bars
 
+NEW_YORK = ZoneInfo("America/New_York")
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--apply", action="store_true", help="write validated missing weights to MongoDB")
-    parser.add_argument("--portfolio-id", help="defaults to the active news-aware portfolio")
-    parser.add_argument("--from-date", default="2026-09-09", help="first date to consider, inclusive")
-    args = parser.parse_args()
 
-    repo = TradingRepository()
+def session_date(value: datetime) -> date:
+    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return aware.astimezone(NEW_YORK).date()
+
+
+def backfill_recent_position_weights(repo: TradingRepository, *, apply: bool = False, portfolio_id: str | None = None, from_date: date = date(2026, 9, 9)) -> int:
     portfolios = repo.list_portfolios()
-    portfolio = next((p for p in portfolios if p.id == args.portfolio_id), None) if args.portfolio_id else next((p for p in portfolios if p.news_enabled), None)
+    portfolio = next((p for p in portfolios if p.id == portfolio_id), None) if portfolio_id else next((p for p in portfolios if p.news_enabled), None)
     if portfolio is None:
-        raise SystemExit("News-aware portfolio not found")
+        raise ValueError("News-aware portfolio not found")
 
-    missing = [metric for metric in portfolio.daily_metrics if metric.date.date() >= date.fromisoformat(args.from_date) and not metric.position_weights]
+    missing = [metric for metric in portfolio.daily_metrics if session_date(metric.date) >= from_date and not metric.position_weights]
     if not missing:
         print("No missing weights in the requested date range.")
-        return
+        return 0
 
-    start_date = min(metric.date.date() for metric in missing)
-    end_date = max(metric.date.date() for metric in portfolio.daily_metrics)
+    start_date = min(session_date(metric.date) for metric in missing)
+    end_date = max(session_date(metric.date) for metric in portfolio.daily_metrics)
     ticker_ids = sorted({position.ticker_id.upper() for position in portfolio.positions})
     current_shares = {position.ticker_id.upper(): int(position.shares) for position in portfolio.positions}
-    order_docs = list(repo.orders.find({"portfolio_id": portfolio.id, "created_at": {"$gte": datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)}}).sort("created_at", 1))
+    order_start = datetime.combine(start_date - timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+    order_docs = list(repo.orders.find({"portfolio_id": portfolio.id, "created_at": {"$gte": order_start}}).sort("created_at", 1))
     ticker_ids = sorted(set(ticker_ids) | {str(order["ticker_id"]).upper() for order in order_docs})
     bars = download_daily_bars(ticker_ids, start=start_date.isoformat())
     closes = bars["Close"]
@@ -50,16 +52,16 @@ def main() -> None:
 
     orders_by_day: dict[date, list[dict]] = defaultdict(list)
     for order in order_docs:
-        created = order.get("created_at")
+        created = order.get("executed_at") or order.get("created_at")
         if created:
-            orders_by_day[created.date()].append(order)
+            orders_by_day[session_date(created)].append(order)
 
-    invested_by_day = {point.timestamp.date(): float(point.invested_value) for point in portfolio.value_history}
+    invested_by_day = {session_date(point.timestamp): float(point.invested_value) for point in portfolio.value_history}
     metrics_by_day: dict[date, list] = defaultdict(list)
     for metric in portfolio.daily_metrics:
-        metrics_by_day[metric.date.date()].append(metric)
+        metrics_by_day[session_date(metric.date)].append(metric)
 
-    dates = sorted({metric.date.date() for metric in missing})
+    dates = sorted({session_date(metric.date) for metric in missing})
     calculated: dict[date, dict[str, float]] = {}
     checks = []
     for day in reversed(dates):
@@ -84,7 +86,6 @@ def main() -> None:
             calculated[day] = {ticker: shares[ticker] * prices[ticker] / total_value for ticker in shares if shares[ticker] * prices[ticker] > 0}
             checks.append((day, "READY", round(error * 100, 2), len(calculated[day]), []))
 
-        # Rewind this date's trades before calculating the previous session.
         for order in reversed(orders_by_day.get(day, [])):
             ticker = str(order["ticker_id"]).upper()
             quantity = int(order["quantity"])
@@ -97,9 +98,9 @@ def main() -> None:
         print(f"{day} {status}: {count} holdings; market-value difference {error}%" + (f"; no close for {', '.join(missing_prices)}" if missing_prices else ""))
 
     ready = set(calculated)
-    print(f"Validated {len(ready)}/{len(dates)} dates; mode={'apply' if args.apply else 'dry-run'}")
-    if not args.apply or not ready:
-        return
+    print(f"Validated {len(ready)}/{len(dates)} dates; mode={'apply' if apply else 'dry-run'}")
+    if not apply or not ready:
+        return len(ready)
 
     for day, weights in calculated.items():
         for metric in metrics_by_day[day]:
@@ -110,6 +111,21 @@ def main() -> None:
                     array_filters=[{"row.date": metric.date, "row.position_weights": {"$eq": {}}}],
                 )
     print(f"Wrote weights for {len(ready)} market dates.")
+    return len(ready)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--apply", action="store_true", help="write validated missing weights to MongoDB")
+    parser.add_argument("--portfolio-id", help="defaults to the active news-aware portfolio")
+    parser.add_argument("--from-date", default="2026-09-09", help="first date to consider, inclusive")
+    args = parser.parse_args()
+
+    repo = TradingRepository()
+    try:
+        backfill_recent_position_weights(repo, apply=args.apply, portfolio_id=args.portfolio_id, from_date=date.fromisoformat(args.from_date))
+    finally:
+        repo.close()
 
 
 if __name__ == "__main__":

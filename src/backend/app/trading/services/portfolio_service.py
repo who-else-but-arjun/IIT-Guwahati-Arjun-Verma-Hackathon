@@ -500,6 +500,22 @@ class PortfolioService:
             aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
             return aware.astimezone(timezone.utc)
 
+        # Older service versions appended multiple snapshots for one NYSE
+        # session. Keep the newest mark per session before calculating returns
+        # or selecting today's row, otherwise duplicate dates skew chart spacing.
+        metrics_by_session = {}
+        for item in sorted(portfolio.daily_metrics, key=lambda row: utc_key(row.date)):
+            key = nyse_date(item.date)
+            previous = metrics_by_session.get(key)
+            if previous and not item.position_weights and previous.position_weights:
+                item.position_weights = dict(previous.position_weights)
+            metrics_by_session[key] = item
+        portfolio.daily_metrics = sorted(metrics_by_session.values(), key=lambda row: utc_key(row.date))
+        values_by_session = {}
+        for item in sorted(portfolio.value_history, key=lambda row: utc_key(row.timestamp)):
+            values_by_session[nyse_date(item.timestamp)] = item
+        portfolio.value_history = sorted(values_by_session.values(), key=lambda row: utc_key(row.timestamp))
+
         prior_points = [point for point in portfolio.value_history if nyse_date(point.timestamp) < session_date]
         previous_point = prior_points[-1] if prior_points else None
         previous_value = previous_point.total_value if previous_point else portfolio.initial_capital

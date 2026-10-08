@@ -766,6 +766,13 @@ html:hover{scrollbar-color:#a9adb477 transparent}
   backdrop-filter: blur(10px);
 }
 .graph-controls .graph-caveat { margin-top: 12px; }
+.graph-controls-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.graph-controls-header .section-kicker { margin: 0; }
+.graph-controls-content { min-width: 0; }
+.graph-controls-content[hidden] { display: none !important; }
+.graph-filter-panel-toggle { display: inline-flex; align-items: center; justify-content: space-between; gap: 15px; min-height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); font-size: 9px; font-weight: 700; }
+.graph-filter-panel-toggle i { color: var(--red); font: 700 15px/1 var(--mono); font-style: normal; }
+.graph-controls.collapsed { bottom: auto; width: 190px; padding: 8px 10px; }
 .canvas-hint { left: 17px; bottom: 15px; z-index: 1; }
 .canvas-count { right: 320px; bottom: 15px; z-index: 1; }
 .graph-legend { border: 0; padding: 12px 4px 0; }
@@ -777,9 +784,13 @@ html:hover{scrollbar-color:#a9adb477 transparent}
   .universe-overlay-toolbar { top: 10px; left: 10px; right: 10px; flex-wrap: wrap; }
   .universe-overlay-toolbar .universe-search { flex: 1 1 100%; max-width: none; }
   .graph-controls { top: 100px; left: 10px; right: 10px; bottom: auto; width: auto; max-height: 205px; }
-  .graph-controls h2 { display: none; }
-  .graph-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
-  .graph-controls>.section-kicker,.graph-controls>.graph-caveat { grid-column: 1 / -1; }
+  .graph-controls { display: block; max-height: 205px; padding: 10px 12px; }
+  .graph-controls-header { min-height: 28px; }
+  .graph-controls-content { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+  .graph-controls-content h2 { display: none; }
+  .graph-controls-content>.graph-caveat { grid-column: 1 / -1; }
+  .graph-controls.collapsed { left: auto; right: 10px; width: 176px; max-height: none; }
+  .graph-filter-panel-toggle { min-height: 28px; }
   .canvas-hint { bottom: 13px; }
   .canvas-count { right: 10px; bottom: 31px; }
 }
@@ -939,15 +950,20 @@ html:hover{scrollbar-color:#a9adb477 transparent}
 :root[data-theme="dark"] .stock-position-card { background: #171819; }
 @media (max-width: 480px) { .stock-position-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .pending-plan-content { min-width: 0; flex: 1; }
+.activity-content > .table-heading { padding: 19px 20px 14px; border-bottom: 1px solid var(--line); }
+.activity-content > .table-heading .button-secondary { min-height: 38px; }
+.pending-callout { align-items: flex-start; gap: 12px; margin: 16px 20px 20px; padding: 15px 16px; border: 1px solid color-mix(in srgb, #d18a25 28%, var(--line)); border-left: 3px solid #d18a25; border-radius: 5px; background: color-mix(in srgb, #fff8ec 48%, var(--bg)); }
+.pending-callout > .pending-dot { margin-top: 3px; }
+.pending-plan-content > b { display: block; padding: 1px 0 5px; font-size: 12px; }
 .pending-plan-card { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 5px; background: var(--bg); }
 .pending-plan-card > header { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .pending-plan-card > header b { font-size: 11px; }
 .pending-plan-card > header span, .pending-plan-note, .pending-plan-empty { color: var(--mut); font-size: 9px; }
 .pending-order-list { display: grid; margin-top: 7px; }
-.pending-plan-card .pending-order-row { display: grid; grid-template-columns: minmax(110px, 1fr) 50px 100px minmax(90px, auto); gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 10px; }
+.pending-plan-card .pending-order-row { display: grid; grid-template-columns: minmax(110px, 1fr) 50px 100px minmax(110px, auto); gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: 10px; }
 .pending-plan-card .pending-order-row > strong { font: 500 9px var(--mono); }
 .pending-plan-card .pending-order-row .ticker-mark { width: 22px; height: 22px; }
-.pending-order-value { text-align: right; font: 9px var(--mono); }
+.pending-order-value { text-align: right; font: 9px var(--mono); white-space: nowrap; }
 .pending-plan-note { display: block; margin-top: 7px; }
 .pending-plan-empty { margin: 8px 0 0; }
 .rebalance-target-chips { display: flex; flex-wrap: wrap; gap: 7px; }
@@ -1237,32 +1253,13 @@ canvas:focus-visible,
   .order-table-wrap .orders-table .order-row:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
 }
 
-/* The Universe filter drawer can be hidden to leave the map unobstructed. */
-.universe-overlay-toolbar.filters-collapsed { right: 16px; }
-.graph-controls.collapsed { display: none; }
-@media (max-width: 760px) {
-  .universe-overlay-toolbar.filters-collapsed { right: 10px; }
-}
-.universe-overlay-toolbar .graph-filter-toggle {
-  min-height: 38px;
-  padding: 0 11px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--bg);
-  color: var(--ink);
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-  box-shadow: 0 4px 18px #1112;
-}
-:root[data-theme="dark"] .universe-overlay-toolbar .graph-filter-toggle { background: #191a1c; color: #ececea; border-color: #3b3d42; }
-
 /* Give the pending plan its own readable spacing inside Portfolio activity. */
 @media (max-width: 700px) {
   .activity-content { min-width: 0; padding-bottom: 18px; }
   .activity-content > .table-heading { align-items: flex-start; gap: 12px; padding: 16px 12px 12px; }
   .activity-content > .table-heading > div { min-width: 0; }
   .activity-content > .table-heading .button-secondary { flex: 0 0 auto; max-width: 145px; white-space: normal; line-height: 1.35; }
+  .activity-content > .table-heading { padding: 16px 12px 12px; border-bottom: 0; }
   .pending-callout { align-items: flex-start; gap: 10px; margin: 4px 12px 18px; padding: 13px 12px; }
   .pending-plan-content { display: grid; gap: 3px; }
   .pending-plan-content > b { display: block; font-size: 11px; line-height: 1.45; }
@@ -1274,7 +1271,7 @@ canvas:focus-visible,
   .pending-plan-card .pending-order-row { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 10px; padding: 10px 0; }
   .pending-plan-card .pending-order-row .ticker-cell { min-width: 0; }
   .pending-plan-card .pending-order-row .side-badge { justify-self: end; }
-  .pending-plan-card .pending-order-row > strong { grid-column: 1; font-size: 10px; }
+  .pending-plan-card .pending-order-row > strong { grid-column: 1; grid-row: 2; font-size: 10px; }
   .pending-order-value { grid-column: 2; grid-row: 2; font-size: 10px; }
   .pending-plan-note { margin-top: 9px; line-height: 1.5; }
   .activity-history { padding: 0 12px; }
@@ -1284,6 +1281,7 @@ canvas:focus-visible,
   .activity-content > .text-button { margin: 14px 12px 0; }
 }
 :root[data-theme="dark"] .pending-plan-card { border-color: #35373c; }
+:root[data-theme="dark"] .pending-callout { background: #211f1b; color: #e8ddc7; border-color: #51432d; border-left-color: #d18a25; }
 :root[data-theme="dark"] .activity-history .activity-item { border-color: #303236; }
 
 /* Keep chart labels and plot geometry legible on narrow screens; swipe horizontally to inspect the full timeline. */

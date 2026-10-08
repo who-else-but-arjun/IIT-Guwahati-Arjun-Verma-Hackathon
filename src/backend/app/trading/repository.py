@@ -295,10 +295,17 @@ class TradingRepository:
             cash=portfolio.cash,
             invested_value=total_value - portfolio.cash,
         )
-        if portfolio.value_history and portfolio.value_history[-1].timestamp.date() == current_time.date():
-            portfolio.value_history[-1] = point
-        else:
-            portfolio.value_history.append(point)
+        session_date = current_time.astimezone(ZoneInfo("America/New_York")).date()
+        nyse_zone = ZoneInfo("America/New_York")
+        def exchange_date(value: datetime) -> date:
+            aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            return aware.astimezone(nyse_zone).date()
+
+        history_by_session = {}
+        for existing in sorted(portfolio.value_history, key=lambda item: item.timestamp):
+            history_by_session[exchange_date(existing.timestamp)] = existing
+        history_by_session[session_date] = point
+        portfolio.value_history = sorted(history_by_session.values(), key=lambda item: item.timestamp)
         portfolio.value_history = portfolio.value_history[-3650:]
         self.save_portfolio(portfolio)
 
