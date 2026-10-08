@@ -136,17 +136,28 @@ export function PortfolioMarkerDrawer({ marker, portfolios = [], events: availab
 
 export function StockDrawer({ symbol, portfolios, orders, tickers = [], onClose, onEvent }) {
   const [transactionPage, setTransactionPage] = useState(1);
+  const [relatedNewsPage, setRelatedNewsPage] = useState(1);
+  const [relatedNewsPageCache, setRelatedNewsPageCache] = useState({});
+  const [relatedNewsLoading, setRelatedNewsLoading] = useState(false);
+  const [relatedNewsError, setRelatedNewsError] = useState("");
   const [priceChartView, setPriceChartView] = useState("line");
   const [transactionOrders, setTransactionOrders] = useState([]);
   const [transactionTotal, setTransactionTotal] = useState(0);
   const [transactionLoading, setTransactionLoading] = useState(false);
   const [selectedPortfolioId, setSelectedPortfolioId] = useState("");
   const transactionPageSize = 20;
+  const relatedNewsPageSize = 5;
+  const relatedNewsInitialSize = 20;
   const loader = useCallback(async () => {
     const [stock, news] = await Promise.allSettled([api.ticker(symbol, "3mo", "1d"), api.tickerEvents(symbol, { limit: 20 })]);
-    return { stock: stock.status === "fulfilled" ? stock.value : null, news: news.status === "fulfilled" ? news.value.events || [] : [], error: stock.status === "rejected" ? stock.reason.message : "" };
+    return { stock: stock.status === "fulfilled" ? stock.value : null, news: news.status === "fulfilled" ? news.value.events || [] : [], newsTotal: news.status === "fulfilled" ? news.value.total_count || 0 : 0, error: stock.status === "rejected" ? stock.reason.message : "" };
   }, [symbol]);
   const { data, loading, error } = usePolling(loader, 0, [loader]);
+  useEffect(() => {
+    setRelatedNewsPage(1);
+    setRelatedNewsPageCache({});
+    setRelatedNewsError("");
+  }, [symbol]);
   const stock = data?.stock;
   const selectedPortfolio = selectedPortfolioId === "all" ? null : portfolios.find((portfolio) => portfolio.id === selectedPortfolioId) || portfolios.find((portfolio) => (portfolio.positions || []).some((position) => position.ticker_id === symbol)) || portfolios[0];
   const position = selectedPortfolio?.positions?.find((item) => item.ticker_id === symbol);
@@ -190,10 +201,30 @@ export function StockDrawer({ symbol, portfolios, orders, tickers = [], onClose,
   const latest = bars.at(-1), previous = bars.at(-2);
   const dayChange = latest?.close && previous?.close ? (latest.close / previous.close - 1) * 100 : null;
   const companyName = stock?.ticker_name?.company_name || symbol;
-  const relatedNews = (data?.news || []).filter((event) => analysisStatus(event) === "complete").sort((a, b) => {
-    const relevance = (event) => affectedTickers(event).find((item) => String(item.ticker_id).toUpperCase() === String(symbol).toUpperCase())?.relevance_score;
-    return (Number(relevance(b)) || 0) - (Number(relevance(a)) || 0) || new Date(eventTime(b)).getTime() - new Date(eventTime(a)).getTime();
-  });
+  const relatedNews = (data?.news || []).filter((event) => analysisStatus(event) === "complete");
+  const relatedNewsTotal = Number(data?.newsTotal) || relatedNews.length;
+  const relatedNewsPages = Math.max(1, Math.ceil(relatedNewsTotal / relatedNewsPageSize));
+  const relatedNewsVisible = relatedNewsPage <= Math.ceil(relatedNewsInitialSize / relatedNewsPageSize)
+    ? relatedNews.slice((relatedNewsPage - 1) * relatedNewsPageSize, relatedNewsPage * relatedNewsPageSize)
+    : relatedNewsPageCache[relatedNewsPage] || [];
+  const changeRelatedNewsPage = async (page) => {
+    if (page < 1 || page > relatedNewsPages || relatedNewsLoading) return;
+    const offset = (page - 1) * relatedNewsPageSize;
+    if (offset >= relatedNewsInitialSize && !relatedNewsPageCache[page]) {
+      setRelatedNewsLoading(true);
+      try {
+        const result = await api.tickerEvents(symbol, { limit: relatedNewsPageSize, offset });
+        setRelatedNewsPageCache((current) => ({ ...current, [page]: result.events || [] }));
+        setRelatedNewsError("");
+      } catch (requestError) {
+        setRelatedNewsError(requestError.message || "Could not load this news page.");
+        return;
+      } finally {
+        setRelatedNewsLoading(false);
+      }
+    }
+    setRelatedNewsPage(page);
+  };
   const heldPositions = portfolios.map((portfolio) => ({ portfolio, position: (portfolio.positions || []).find((item) => String(item.ticker_id).toUpperCase() === String(symbol).toUpperCase()) })).filter(({ position }) => Number(position?.shares) > 0);
 
   return <Drawer title="Stock details" eyebrow="SECURITY PROFILE" onClose={onClose}>
@@ -207,7 +238,7 @@ export function StockDrawer({ symbol, portfolios, orders, tickers = [], onClose,
       {bars.length > 1 && <section className="drawer-section stock-chart-section"><div className="stock-section-heading"><h4>Price history</h4><span>3 months · daily</span></div><PriceHistoryChart bars={bars} markers={chartMarkers} height={220} onViewChange={setPriceChartView}/></section>}
       {selectedPortfolio && <section className="drawer-section stock-weight-section"><div className="stock-section-heading"><h4>{symbol} portfolio weight</h4><span>{selectedPortfolio.news_enabled ? "News-aware" : "Normal strategy"}</span></div><WeightHistoryChart metrics={selectedPortfolio.daily_metrics} symbol={symbol} height={235} newsEnabled={selectedPortfolio.news_enabled} portfolios={portfolios} activePortfolioId={selectedPortfolio.id}/></section>}
       <section className={`drawer-section ${priceChartView === "line" ? "stock-chart-after-line" : ""}`}><div className="stock-section-heading"><h4>Portfolio position</h4><span>{heldPositions.length} portfolio{heldPositions.length === 1 ? "" : "s"}</span></div>{heldPositions.length ? <div className="stock-position-cards">{heldPositions.map(({ portfolio, position: held }) => <article className="stock-position-card" key={portfolio.id}><header><span className="ticker-cell"><TickerMark symbol={symbol} tickers={tickers}/><span><b>{portfolio.name}</b><small>{portfolio.news_enabled ? "News-aware portfolio" : "Normal strategy portfolio"}</small></span></span><span className="stock-position-type">{portfolio.news_enabled ? "NEWS" : "NORMAL"}</span></header><div className="stock-position-metrics"><div><small>Shares held</small><b>{number(held.shares, 0)}</b></div><div><small>Portfolio weight</small><b>{percent(held.weight, 2)}</b></div><div><small>Market value</small><b>{money(held.market_value, portfolio.currency || "USD")}</b></div><div><small>Unrealized P&amp;L</small><b className={changeClass(held.unrealized_pnl)}>{money(held.unrealized_pnl, portfolio.currency || "USD")}</b></div></div></article>)}</div> : <p className="muted">This stock is not currently held in the available portfolios.</p>}</section>
-      <section className="drawer-section"><div className="stock-section-heading"><h4>Related news</h4><span>{relatedNews.length} analyzed</span></div>{relatedNews.length ? <div className="stock-related-news">{relatedNews.map((event) => {
+      <section className="drawer-section"><div className="stock-section-heading"><h4>Related news</h4><span>{relatedNewsTotal.toLocaleString()} analyzed</span></div>{relatedNewsTotal ? <><div className="stock-related-news">{relatedNewsVisible.map((event) => {
         const relevance = affectedTickers(event).find((item) => String(item.ticker_id).toUpperCase() === String(symbol).toUpperCase())?.relevance_score;
         const sentiment = event.sentiment?.score;
         const impact = event.sentiment?.impact_score;
@@ -221,7 +252,7 @@ export function StockDrawer({ symbol, portfolios, orders, tickers = [], onClose,
             <span className="related-score impact"><small>News impact</small><b>{impactScore(impact)}</b></span>
           </span>
         </button>;
-      })}</div> : <p className="muted">No analyzed news is currently linked to {symbol}.</p>}</section>
+      })}</div>{relatedNewsError && <p className="drawer-error">{relatedNewsError}</p>}<PagePagination page={relatedNewsPage} totalPages={relatedNewsPages} hasMore={relatedNewsPage < relatedNewsPages} onPage={changeRelatedNewsPage} loading={relatedNewsLoading}/></> : <p className="muted">No analyzed news is currently linked to {symbol}.</p>}</section>
       <section className="drawer-section"><div className="stock-section-heading"><h4>Purchase and sale history</h4><span>{transactionTotal} matching order{transactionTotal === 1 ? "" : "s"}</span></div><div className="filter-bar stock-portfolio-filter"><label>Portfolio<select value={selectedPortfolio?.id || "all"} onChange={(event) => setSelectedPortfolioId(event.target.value)}><option value="all">All portfolios</option>{portfolios.map((portfolio) => <option key={portfolio.id} value={portfolio.id}>{portfolio.name}</option>)}</select></label></div>{transactionLoading && !transactionOrders.length ? <p className="muted">Loading stock orders…</p> : transactionRows.length ? <div className="table-scroll"><table className="data-table stock-transaction-table"><thead><tr><th>Date</th><th>Side</th><th className="numeric">Shares</th><th className="numeric">Execution</th><th>Reason</th></tr></thead><tbody>{transactionRows.map((order) => <tr key={order.id}><td>{dateTime(order.created_at)}</td><td><span className={`side-badge ${order.side}`}>{order.side}</span></td><td className="numeric">{number(order.quantity, 0)}</td><td className="numeric">{money(order.price, currency)}</td><td>{formatReason(order.reason || "Manual")}</td></tr>)}</tbody></table></div> : <p className="muted">No purchase or sale records are loaded for this stock.</p>}{transactionTotal > 0 && <PagePagination page={transactionPage} totalPages={transactionPages} hasMore={transactionPage < transactionPages} onPage={changeTransactionPage} loading={transactionLoading}/>}</section>
     </div>
   </Drawer>;

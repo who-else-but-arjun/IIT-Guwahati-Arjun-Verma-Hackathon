@@ -197,8 +197,9 @@ def get_ticker_events(request: HttpRequest, ticker_name: str) -> JsonResponse:
             limit=limit,
             offset=offset,
         )
-        return JsonResponse({"ticker": ticker_name, "count": len(events), "offset": offset,
-                             "limit": limit, "has_more": len(events) == limit,
+        total_count = repository.count_ticker_events(ticker_name)
+        return JsonResponse({"ticker": ticker_name, "count": len(events), "total_count": total_count, "offset": offset,
+                             "limit": limit, "has_more": offset + len(events) < total_count,
                              "events": [event.model_dump(mode="json") for event in events]})
     except (ValueError, TypeError) as exc:
         return JsonResponse({"detail": str(exc)}, status=400)

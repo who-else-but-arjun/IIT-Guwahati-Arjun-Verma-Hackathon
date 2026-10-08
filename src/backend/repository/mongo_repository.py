@@ -101,6 +101,13 @@ class MongoRepository(TickerRepositoryMixin):
              ("event_timestamp", DESCENDING)],
             name="news_high_impact",
         )
+        self.news_events.create_index(
+            [("relevant_tickers.ticker_id", ASCENDING),
+             ("metadata.analysis_status", ASCENDING),
+             ("metadata.analysis_updated_at", DESCENDING),
+             ("event_timestamp", DESCENDING)],
+            name="news_ticker_analysis_feed",
+        )
         expected_pending_key = {"metadata.analysis_status": ASCENDING, "event_timestamp": ASCENDING}
         for existing in self.news_events.list_indexes():
             if existing.get("name") == "news_pending_analysis" and dict(existing["key"]) != expected_pending_key:
@@ -566,6 +573,20 @@ class MongoRepository(TickerRepositoryMixin):
             query["category"] = category
         return self._query_events(query, score_min=score_min, score_max=score_max,
                                   since=since, until=until, limit=limit, offset=offset)
+
+    @cached_read("mongo-ticker-event-count", 20)
+    def count_ticker_events(self, ticker_name: str) -> int:
+        """Count analyzed stories available in a ticker's related-news drawer."""
+        ticker = self.get_ticker(ticker_name)
+        if ticker is None:
+            return 0
+        return self.news_events.count_documents({
+            "relevant_tickers.ticker_id": ticker.ticker_name.ticker_id,
+            "metadata.analysis_status": NewsAnalysisStatus.COMPLETE.value,
+            "category": {"$type": "string"},
+            "sentiment.score": {"$type": "number"},
+            "sentiment.impact_score": {"$type": "number"},
+        })
 
     def _query_events(
         self,

@@ -1121,6 +1121,59 @@ canvas:focus-visible,
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
 
+/* Keep shared drawer content inside its padded shell and prevent cards from
+   losing their right edge on narrow screens. The drawer itself owns scrolling. */
+.dr > .drawer-content {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  overflow: visible;
+}
+.dr .drawer-section,
+.dr .stock-detail-content,
+.dr .rebalance-detail-content,
+.dr .rebalance-news-list,
+.dr .stock-related-news,
+.dr .table-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+.dr .rebalance-news-card,
+.dr .related-event-button {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.dr .rebalance-news-card { border-right: 1px solid var(--line); }
+.dr .related-event-meta,
+.dr .marker-event-metadata,
+.dr .linked-event-tickers { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+
+@media (max-width: 720px) {
+  .dr {
+    box-sizing: border-box;
+    width: 100vw;
+    max-width: 100vw;
+    padding: max(14px, env(safe-area-inset-top)) 12px calc(22px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+  }
+  .dr > .drawer-content { padding: 0; }
+  .dr .rebalance-news-card {
+    padding: 12px;
+    border-right: 1px solid var(--line);
+  }
+  .dr .related-event-button {
+    padding: 12px !important;
+    border: 1px solid var(--line) !important;
+    border-radius: 6px !important;
+    background: var(--soft);
+  }
+  .dr .stock-related-news { gap: 8px; }
+  .dr .related-event-meta { justify-content: flex-start; }
+  .dr .related-event-source { overflow-wrap: anywhere; }
+}
+
 :root[data-theme="dark"] .skeleton-line,
 :root[data-theme="dark"] .skeleton-row i,
 :root[data-theme="dark"] .skeleton-row b,
