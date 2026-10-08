@@ -39,6 +39,18 @@ flowchart LR
     UI -. hosted separately .-> P[Cloudflare Pages]
 ```
 
+### MongoDB document schemas
+
+The MongoDB documents used by the application are illustrated below.
+
+#### News events
+
+![News events MongoDB schema](docs/news_events_schema.svg)
+
+#### Tickers
+
+![Tickers MongoDB schema](docs/tickers_schema.svg)
+
 ### Key frameworks, databases, and AI/ML libraries
 
 - **Frontend:** React 18, Vite 5, JavaScript.
