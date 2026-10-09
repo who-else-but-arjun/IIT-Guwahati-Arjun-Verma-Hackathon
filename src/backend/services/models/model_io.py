@@ -12,7 +12,7 @@ import re
 import shutil
 from collections import Counter
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import torch
 from transformers import AutoTokenizer
@@ -177,12 +177,30 @@ def infer_text(model: Any, texts: str | Sequence[str], *, batch_size=16):
         logits = model.infer(tokens, device=device)
         if config["task"] == "classification":
             probs = torch.softmax(logits, dim=-1).cpu()
-            labels = config.get("labels", DEFAULT_SENTIMENT_LABELS)
+            labels = _labels_in_index_order(
+                config.get("labels") or config.get("id2label") or DEFAULT_SENTIMENT_LABELS,
+                probs.shape[-1],
+            )
             outputs.extend([{"label": labels[int(p.argmax())], "probabilities": dict(zip(labels, p.tolist()))}
                             for p in probs])
         else:
             outputs.extend(logits.float().cpu().tolist())
     return outputs[0] if is_single else outputs
+
+
+def _labels_in_index_order(labels: Any, count: int) -> list[str]:
+    """Normalize list and JSON object label maps to the model's class order."""
+    if isinstance(labels, Mapping):
+        ordered = []
+        for index in range(count):
+            value = labels.get(index, labels.get(str(index), labels.get(f"LABEL_{index}")))
+            if value is None:
+                value = next((name for name, class_index in labels.items()
+                              if str(class_index) == str(index)), f"class_{index}")
+            ordered.append(str(value))
+        return ordered
+    ordered = [str(label) for label in labels]
+    return (ordered + [f"class_{index}" for index in range(len(ordered), count)])[:count]
 
 
 def infer_laya(agent, states, question, *, batch_size=8):

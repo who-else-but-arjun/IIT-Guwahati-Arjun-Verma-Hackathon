@@ -90,7 +90,7 @@ class NewsProcessingWorkflow:
         except Exception as exc:
             reason = f"{type(exc).__name__}: {exc}"[:500]
             self.repository.defer_news_analysis(event_id, exc)
-            logger.warning("News analysis pending for event %s: %s", event_id, reason)
+            logger.exception("News analysis pending for event %s: %s", event_id, reason)
             return event_id
 
     def retry_pending(self, limit: int = 50) -> int:
