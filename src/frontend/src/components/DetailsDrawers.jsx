@@ -14,6 +14,7 @@ const tickerNewsMarkers = (events = [], bars = [], symbol = "") => {
     && Number.isFinite(Number(bar.close)));
   const seen = new Set();
   const byIndex = new Map();
+  if (validBars.length < 2) return [];
   const barDay = (bar) => new Date(bar.timestamp || bar.date).toISOString().slice(0, 10);
   const eventMarketTime = (value) => {
     const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(new Date(value));

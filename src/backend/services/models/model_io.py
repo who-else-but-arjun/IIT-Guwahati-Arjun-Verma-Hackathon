@@ -272,22 +272,45 @@ def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> lis
 
 def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
                          b: float = 0.75) -> list[float]:
-    """Score article terms against each configured ticker and company name."""
-    def tokens(value: str) -> list[str]:
-        # Keep class tickers such as BRK.B together; one-character terms are
-        # handled separately because they are noisy in ordinary prose.
-        return [token for token in re.findall(r"[a-z0-9]+(?:\.[a-z0-9]+)?", value.lower())
-                if len(token) > 1]
+    """Score distinctive company names and explicit ticker mentions.
 
-    query = Counter(tokens(str(text or "")))
-    query.update(symbol.lower() for symbol in re.findall(r"\$([A-Z])\b", str(text or ""), re.IGNORECASE))
+    Short ticker symbols are highly ambiguous in prose (for example, ``GS``).
+    They only contribute when written as a cashtag or alongside nearby market
+    language. Company-name matching ignores generic corporate words.
+    """
+    raw_text = str(text or "")
+    def tokens(value: str) -> list[str]:
+        return re.findall(r"[a-z0-9]+(?:\.[a-z0-9]+)?", value.lower())
+
+    generic_terms = {
+        "the", "inc", "incorporated", "corp", "corporation", "company", "co",
+        "limited", "ltd", "plc", "llc", "group", "holding", "holdings", "class",
+        "technology", "technologies", "system", "systems", "service", "services",
+        "international", "global", "industries", "industrial", "products", "brands",
+        "energy", "health", "financial", "bank", "american", "united", "general",
+    }
+    query = Counter(token for token in tokens(raw_text)
+                    if len(token) > 2 and token not in generic_terms)
+    cashtags = {match.upper().replace("-", ".") for match in
+                re.findall(r"(?<![A-Za-z0-9])\$([A-Z][A-Z0-9.-]{0,6})\b", raw_text)}
+    context_pattern = re.compile(
+        r"\b(?:stock|stocks|share|shares|ticker|equity|trading|price|market|bank|"
+        r"earnings|results|reported|analyst|nyse|nasdaq|investor|dividend)\b", re.I,
+    )
+    explicit_tickers = set(cashtags)
+    for match in re.finditer(r"(?<![A-Za-z0-9])([A-Z][A-Z0-9.]{1,6})(?![A-Za-z0-9])", raw_text):
+        symbol = match.group(1).upper().replace("-", ".")
+        if len(symbol) >= 3:
+            explicit_tickers.add(symbol)
+        elif context_pattern.search(raw_text[max(0, match.start() - 48):match.end() + 48]):
+            explicit_tickers.add(symbol)
     documents = []
     for symbol in symbols:
-        document = tokens(f"{symbol} {SP100_COMPANIES.get(symbol, '')}")
-        if len(symbol) == 1:
-            document.append(symbol.lower())
+        company_tokens = tokens(SP100_COMPANIES.get(symbol, ""))
+        document = [token for token in company_tokens
+                    if len(token) > 2 and token not in generic_terms]
         documents.append(document)
-    if not query or not documents:
+    if (not query and not explicit_tickers) or not documents:
         return [0.0] * len(documents)
     frequencies = [Counter(document) for document in documents]
     document_frequency = Counter(term for counts in frequencies for term in counts)
@@ -305,6 +328,10 @@ def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
             inverse_frequency = math.log(1.0 + (document_count - df + 0.5) / (df + 0.5))
             denominator = term_frequency + k1 * (1.0 - b + b * length / average_length)
             score += inverse_frequency * (term_frequency * (k1 + 1.0) / denominator) * min(query_frequency, 3)
+        if symbol in explicit_tickers:
+            # One explicit symbol is a strong lexical hit, without treating
+            # ordinary two-letter words as securities.
+            score += 4.0
         scores.append(score)
     return scores
 
