@@ -142,10 +142,23 @@ def rebalance_trigger(portfolio: Portfolio, volumes: pd.DataFrame, now: pd.Times
     """Check elapsed market sessions and a 5/20-session volume-spike trigger."""
     if portfolio.last_rebalanced_at is None:
         return "initial"
-    last_rebalanced = pd.Timestamp(portfolio.last_rebalanced_at).normalize()
-    elapsed_sessions = sum(last_rebalanced < session <= now.normalize() for session in volumes.index)
+    from app.trading.services.market_data import NEW_YORK
+
+    last_timestamp = pd.Timestamp(portfolio.last_rebalanced_at)
+    if last_timestamp.tzinfo is None:
+        # Mongo reads UTC values as naive datetimes unless tz_aware is enabled.
+        last_timestamp = last_timestamp.tz_localize("UTC")
+    current_timestamp = pd.Timestamp(now)
+    if current_timestamp.tzinfo is None:
+        current_timestamp = current_timestamp.tz_localize("UTC")
+    last_rebalanced = last_timestamp.tz_convert(NEW_YORK).date()
+    current_session = current_timestamp.tz_convert(NEW_YORK).date()
+    sessions = sorted({pd.Timestamp(session).date() for session in volumes.index})
+    elapsed_sessions = sum(last_rebalanced < session <= current_session for session in sessions)
     if elapsed_sessions >= portfolio.config.rebalance_days:
         return "static_period"
+    if current_session <= last_rebalanced:
+        return None
     if not portfolio.positions:
         return None
     recent = volumes.tail(VOLUME_RECENT_DAYS).mean()

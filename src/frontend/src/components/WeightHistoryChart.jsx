@@ -62,6 +62,7 @@ export function WeightHistoryChart({ metrics = [], symbol, orders = [], rebalanc
   });
 
   const linkedById = new Map((events || []).map((event) => [eventId(event), event]));
+  const pendingNewsPlans = (rebalances || []).filter((plan) => plan.status === "pending" && plan.reason === "news_sentiment");
   const markerGroups = new Map();
   const markerKind = (reason, eventIds = []) => {
     const value = String(reason || "").toLowerCase();
@@ -82,6 +83,14 @@ export function WeightHistoryChart({ metrics = [], symbol, orders = [], rebalanc
   };
   (orders || []).forEach((order, index) => {
     const ids = [...new Set([...(order.event_ids || []), ...(order.event_id ? [order.event_id] : [])])];
+    const orderTime = new Date(order.executed_at || order.created_at).getTime();
+    const belongsToPendingPlan = pendingNewsPlans.some((plan) => {
+      const planEventIds = new Set([...(plan.event_ids || []), ...Object.values(plan.ticker_event_ids || {}).flat()]);
+      const decisionTime = new Date(plan.decision_at).getTime();
+      return Number.isFinite(orderTime) && Number.isFinite(decisionTime) && orderTime >= decisionTime
+        && ids.some((id) => planEventIds.has(id));
+    });
+    if (belongsToPendingPlan) return;
     addMarker({ date: order.executed_at || order.created_at, reason: order.reason, eventIds: ids, order }, index);
   });
   (rebalances || []).filter((plan) => plan.status === "filled" && plan.executed_at).forEach((plan, index) => {

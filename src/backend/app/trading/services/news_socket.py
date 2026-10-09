@@ -73,6 +73,7 @@ def run_portfolio_engine() -> None:
     initialized = False
     last_sync_attempt = 0.0
     last_mark = 0.0
+    last_strategy_check_session = None
     while True:
         try:
             with PORTFOLIO_STATE_LOCK:
@@ -166,6 +167,14 @@ def run_portfolio_engine() -> None:
                             "Synchronized portfolio %s through daily bars: days=%s orders=%s value=%.2f",
                             portfolio.id, days, orders, portfolio.portfolio_value,
                         )
+                # Strategy triggers use completed daily volume bars. Evaluate
+                # once after the NYSE close so the normal (non-news) portfolio
+                # can create its next-session plan without relying on a manual
+                # API call or on the NLP news socket.
+                if (now_local.time() >= close_after and latest_session is not None
+                        and last_strategy_check_session != latest_session):
+                    service.run_scheduled_rebalances()
+                    last_strategy_check_session = latest_session
                 if monotonic_now - last_mark >= 900:
                     service.refresh_active_portfolios()
                     last_mark = monotonic_now

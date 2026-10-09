@@ -357,11 +357,6 @@ class PortfolioService:
                                 reason: str, execution_time: datetime | None = None) -> None:
         current_shares = {position.ticker_id: position.shares for position in portfolio.positions}
         total_value = portfolio.cash + sum(position.shares * prices.get(position.ticker_id, position.last_price) for position in portfolio.positions)
-        desired_shares = {
-            ticker: int(max(0.0, weight) * total_value / prices[ticker])
-            for ticker, weight in targets.items()
-            if ticker in prices and prices[ticker] > 0
-        }
         ticker_event_ids = ticker_event_ids or {}
 
         # News signals increase target weights on top of the existing portfolio.
@@ -371,6 +366,12 @@ class PortfolioService:
         if reason == "news_sentiment" and target_total > 1.0:
             targets = {ticker: max(0.0, float(weight)) / target_total
                        for ticker, weight in targets.items()}
+
+        desired_shares = {
+            ticker: int(max(0.0, weight) * total_value / prices[ticker])
+            for ticker, weight in targets.items()
+            if ticker in prices and prices[ticker] > 0
+        }
 
         for ticker, shares in current_shares.items():
             desired_shares.setdefault(ticker, 0)

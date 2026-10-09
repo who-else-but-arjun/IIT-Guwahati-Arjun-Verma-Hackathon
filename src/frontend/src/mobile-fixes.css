@@ -1,12 +1,4 @@
 /* Mobile/touch corrections layered after the reference stylesheet. */
-@media (hover: none) and (pointer: coarse) {
-  .rt:hover,
-  .rt:focus-within,
-  .pt:hover,
-  .pt:focus-within {
-    animation-play-state: running;
-  }
-}
 
 @media (max-width: 760px) {
   .run,
@@ -18,11 +10,6 @@
   .rw,
   .pulse {
     touch-action: pan-y;
-  }
-
-  .rt,
-  .pt {
-    animation-play-state: running;
   }
 
   .order-table-wrap {
@@ -85,9 +72,25 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) and (max-width: 760px) {
+/* Keep ticker content stable on phones. CSS marquee transforms can disappear
+   during mobile browser compositing, so make the strips swipeable instead. */
+@media (max-width: 760px) {
+  .rw,
+  .pulse {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+  }
+
+  .rw::-webkit-scrollbar,
+  .pulse::-webkit-scrollbar { display: none; }
+
   .rt,
   .pt {
-    animation: rn 120s linear infinite !important;
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
   }
 }
