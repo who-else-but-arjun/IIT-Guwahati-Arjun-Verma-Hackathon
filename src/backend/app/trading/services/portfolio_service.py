@@ -29,7 +29,8 @@ from app.trading.services.strategy import (
 from app.trading.constants import (GRAPH_PROPAGATION_SCALE, MAX_NEWS_TICKERS_PER_PLAN,
                                    MIN_NEWS_IMPACT_SCORE, MIN_NEWS_SENTIMENT_MAGNITUDE, SP100_TICKERS)
 from app.trading.services.market_data import (
-    NEW_YORK, current_metric_session, download_latest_prices, download_open_prices_on, next_session_open,
+    NEW_YORK, current_metric_session, download_latest_prices, download_open_prices_on,
+    next_session_open,
 )
 
 logger = logging.getLogger(__name__)
@@ -501,6 +502,30 @@ class PortfolioService:
             aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
             return aware.astimezone(timezone.utc)
 
+        local_today = now.astimezone(NEW_YORK).date()
+
+        def normalize_session_timestamp(value: datetime) -> datetime:
+            """Keep current pre-open marks on the last completed NYSE session.
+
+            Older code selected the prior session for the metric date before
+            the open, but persisted the wall-clock timestamp. That made a
+            stale pre-market value look like a new trading day's chart point.
+            """
+            aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            local = aware.astimezone(NEW_YORK)
+            if local.date() == local_today and session_date != local.date():
+                return datetime.combine(session_date, time(16, 0), tzinfo=NEW_YORK).astimezone(timezone.utc)
+            return aware.astimezone(timezone.utc)
+
+        # Repair snapshots written by older versions too: pre-open marks must
+        # remain anchored to the previous completed session in persisted data.
+        for item in portfolio.daily_metrics:
+            item.date = normalize_session_timestamp(item.date)
+        for item in portfolio.value_history:
+            item.timestamp = normalize_session_timestamp(item.timestamp)
+
+        snapshot_timestamp = normalize_session_timestamp(now)
+
         # Older service versions appended multiple snapshots for one NYSE
         # session. Keep the newest mark per session before calculating returns
         # or selecting today's row, otherwise duplicate dates skew chart spacing.
@@ -533,7 +558,7 @@ class PortfolioService:
         daily_cost = sum(order.transaction_cost for order in todays_orders)
         daily_turnover = sum(order.gross_value for order in todays_orders) / previous_value if previous_value else 0.0
         metric = PortfolioDailyMetrics(
-            date=now,
+            date=snapshot_timestamp,
             portfolio_value=total_value,
             position_weights={position.ticker_id: position.weight for position in portfolio.positions if position.shares > 0},
             daily_pnl=daily_pnl,
@@ -564,7 +589,7 @@ class PortfolioService:
         if point_index is None:
             from app.trading.model import PortfolioValuePoint
             portfolio.value_history.append(PortfolioValuePoint(
-                timestamp=now,
+                timestamp=snapshot_timestamp,
                 total_value=total_value,
                 cash=portfolio.cash,
                 invested_value=total_value - portfolio.cash,
@@ -576,6 +601,6 @@ class PortfolioService:
             point.cash = portfolio.cash
             point.invested_value = total_value - portfolio.cash
             point.benchmark_value = portfolio.benchmark_value
-            point.timestamp = now
+            point.timestamp = snapshot_timestamp
         portfolio.value_history.sort(key=lambda point: utc_key(point.timestamp))
         portfolio.value_history = portfolio.value_history[-3650:]

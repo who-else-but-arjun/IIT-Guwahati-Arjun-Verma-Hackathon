@@ -15,6 +15,14 @@ const nyseSessionKey = (value) => {
   if (!Number.isFinite(timestamp.getTime())) return "";
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(timestamp);
 };
+const isPreMarketSnapshot = (value) => {
+  const timestamp = new Date(value);
+  if (!Number.isFinite(timestamp.getTime())) return true;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(timestamp).map(({ type, value: part }) => [type, part]));
+  return Number(parts.hour) * 60 + Number(parts.minute) < 9 * 60 + 30;
+};
 const metricValue = (metric, mode) => mode === "value" ? metric.portfolio_value : mode === "return" ? Number(metric.cumulative_return || 0) * 100 : Number(metric.drawdown || 0) * 100;
 const normalizedHistory = (portfolio, mode) => {
   const history = mode === "value" ? portfolio.value_history : portfolio.daily_metrics;
@@ -23,7 +31,7 @@ const normalizedHistory = (portfolio, mode) => {
     const timestamp = item.timestamp || item.date;
     const session = nyseSessionKey(timestamp);
     const value = mode === "value" ? item.total_value : metricValue(item, mode);
-    if (!session || !Number.isFinite(Number(value))) continue;
+    if (!session || isPreMarketSnapshot(timestamp) || !Number.isFinite(Number(value))) continue;
     const current = bySession.get(session);
     if (!current || new Date(timestamp).getTime() >= new Date(current.timestamp).getTime()) bySession.set(session, { timestamp, value: Number(value), session });
   }
