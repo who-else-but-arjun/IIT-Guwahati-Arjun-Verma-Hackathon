@@ -1331,3 +1331,8 @@ canvas:focus-visible,
 .price-chart-marker-tooltip{top:44px;right:8px;left:auto;transform:none;z-index:5}
 .ohlc-news-marker{cursor:pointer;outline:none}
 .ohlc-news-marker:focus-visible circle{stroke:var(--red);stroke-width:3}
+.chart-marker-tooltip.has-news-list{pointer-events:auto}
+.chart-news-list{display:grid;gap:6px;max-height:150px;overflow:auto;padding-right:4px;overscroll-behavior:contain}
+.chart-news-item{display:grid;gap:2px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.chart-news-item>b{font-size:10px;line-height:1.35;white-space:normal;overflow-wrap:anywhere}
+.chart-news-item>small{font-size:9px}

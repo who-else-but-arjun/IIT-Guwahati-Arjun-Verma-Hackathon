@@ -13,7 +13,7 @@ const tickerNewsMarkers = (events = [], bars = [], symbol = "") => {
     && Number.isFinite(new Date(bar.timestamp || bar.date).getTime())
     && Number.isFinite(Number(bar.close)));
   const seen = new Set();
-  const markers = [];
+  const byIndex = new Map();
   const firstBarAt = new Date(validBars[0]?.timestamp || validBars[0]?.date).getTime();
   const lastBarAt = new Date(validBars.at(-1)?.timestamp || validBars.at(-1)?.date).getTime();
   for (const event of events || []) {
@@ -24,33 +24,29 @@ const tickerNewsMarkers = (events = [], bars = [], symbol = "") => {
       || (id && seen.has(id))) continue;
     const index = validBars.findIndex((bar) => new Date(bar.timestamp || bar.date).getTime() >= publishedAt);
     if (index < 0) continue;
+    if (id) seen.add(id);
+    const day = byIndex.get(index) || { index, events: [] };
+    day.events.push({ ...event, chartEventTimestamp: eventTime(event) });
+    byIndex.set(index, day);
+  }
+  return [...byIndex.values()].map(({ index, events: dayEvents }) => {
     const previousClose = Number(validBars[index - 1]?.close);
     const followingClose = Number(validBars[index]?.close);
     const priceChangePct = index > 0 && previousClose > 0 && followingClose > 0
       ? (followingClose / previousClose - 1) * 100 : null;
-    if (id) seen.add(id);
-    markers.push({
-      id: id || `${ticker}-${publishedAt}`,
+    const headlines = dayEvents.map((item) => cleanText(item.headline) || "News event");
+    return {
+      id: `${ticker}-${new Date(validBars[index].timestamp || validBars[index].date).toISOString().slice(0, 10)}`,
       index,
       timestamp: validBars[index].timestamp || validBars[index].date,
-      eventTimestamp: eventTime(event),
+      eventTimestamp: dayEvents[0]?.chartEventTimestamp,
       priceChangePct,
       kind: "event",
-      headline: cleanText(event.headline) || "News event",
-      label: cleanText(event.headline) || "News event",
-      event,
-    });
-  }
-  const byIndex = new Map();
-  markers.forEach((marker) => {
-    const group = byIndex.get(marker.index) || [];
-    group.push(marker);
-    byIndex.set(marker.index, group);
+      headline: `${headlines.length} related news ${headlines.length === 1 ? "story" : "stories"}`,
+      label: `${headlines.length} related news ${headlines.length === 1 ? "story" : "stories"}`,
+      events: dayEvents,
+    };
   });
-  for (const group of byIndex.values()) group.forEach((marker, index) => {
-    marker.offset = (index - (group.length - 1) / 2) * 8;
-  });
-  return markers;
 };
 
 const tickerEventsInHistory = async (symbol, bars) => {
@@ -124,7 +120,7 @@ export function EventDrawer({ event, portfolios, orders, pending, prices = {}, o
   const mergedPlanId = plans.map((plan) => /merged into plan\s+([a-f\d]+)/i.exec(plan.last_error || "")?.[1]).find(Boolean);
   const mergedPlan = mergedPlanId ? storedActivity.rebalances.find((plan) => plan.id === mergedPlanId) : null;
   const modelReady = analysisStatus(detail) === "complete";
-  return <Drawer title="Event brief" eyebrow="NEWS DETAIL" onClose={onClose}><div className="event-detail-content">{error && <p className="muted">Could not refresh event detail; showing the event from the feed.</p>}{loading && <p className="muted">Loading full event and stock histories…</p>}<h3>{cleanText(detail.headline)}</h3><div className="detail-meta event-detail-meta"><span>{dateTime(eventTime(detail))}</span><span>{detail.metadata?.source || detail.metadata?.provider || "News wire"}</span><span className="news-category-chip"><NewsCategoryIcon category={detail.category}/>{detail.category?.replaceAll("_", " ") || "Uncategorized"}</span></div>{detail.text && <p className="event-fulltext">{cleanText(detail.text)}</p>}{detail.url && <a className="button-secondary source-button" href={detail.url} target="_blank" rel="noreferrer">Open source story ↗</a>}<section className="drawer-section"><h4>Model analysis</h4><div className="drawer-score-row"><SentimentMeter score={modelReady ? detail.sentiment?.score : null}/><span>Impact <b>{!modelReady ? "Pending" : impactScore(detail.sentiment?.impact_score)}</b></span>{analysisStatus(detail) !== "complete" && <span>Status <b>{analysisStatus(detail).replaceAll("_", " ")}</b></span>}</div><p className="muted">Sentiment describes the model’s reading of this story. It is not a forecast of price movement.</p></section><section className="drawer-section"><h4>Affected stocks</h4>{symbols.length ? <><div className="table-scroll event-stock-table-wrap"><table className="data-table event-stock-table"><thead><tr><th>Stock</th><th>Shares held</th><th className="numeric">Relevance</th><th className="numeric">Price</th><th className="numeric">Day</th></tr></thead><tbody>{symbols.slice(0, 5).map((item) => { const bars = priceHistories[item.ticker_id]?.bars || [], last = bars.at(-1), prev = bars.at(-2), change = last && prev ? (last.close / prev.close - 1) * 100 : null, held = (portfolios || []).map((portfolio) => ({ portfolio, position: (portfolio.positions || []).find((position) => String(position.ticker_id).toUpperCase() === String(item.ticker_id).toUpperCase()) })).filter(({ position }) => Number(position?.shares) > 0); return <tr key={item.ticker_id}><td><button className="ticker-link" onClick={() => onTicker(item.ticker_id)}>{item.ticker_id}</button></td><td>{held.length ? <div className="event-holding-list">{held.map(({ portfolio, position }) => <span className="event-holding-chip" key={portfolio.id}><b>{portfolio.news_enabled ? "News-aware" : "Normal"}</b>{number(position.shares, 0)}</span>)}</div> : <span className="muted">Not held</span>}</td><td className="numeric">{number(item.relevance_score, 2)}</td><td className="numeric">{last ? money(last.close) : "—"}</td><td className={`numeric ${changeClass(change)}`}>{percent(change, 2, false)}</td></tr>; })}</tbody></table></div>{symbols.slice(0, 5).map((item) => { const chart = priceHistories[item.ticker_id] || {}, bars = (chart.bars || []).filter((bar) => bar.close != null && Number.isFinite(Number(bar.close))), chartEvents = [...(chart.news || [])]; if (id && !chartEvents.some((item) => eventId(item) === id)) chartEvents.push(detail); const markers = tickerNewsMarkers(chartEvents, bars, item.ticker_id); if (bars.length < 2) return null; return <div className="event-stock-chart" key={`chart-${item.ticker_id}`}><h5>{item.ticker_id}: related news in price history</h5><PriceHistoryChart bars={bars} markers={markers} height={210}/><p>Hover a marker for the headline and the price change from the prior close to the first daily close after publication.</p></div>; })}</> : <p className="muted">No affected tickers have been identified.</p>}</section><EventPortfolioActions linkedOrders={linkedOrders} plans={actionablePlans} portfolios={portfolios} prices={prices} mergedPlanId={mergedPlanId} mergedPlan={mergedPlan} allPlans={plans}/></div></Drawer>;
+  return <Drawer title="Event brief" eyebrow="NEWS DETAIL" onClose={onClose}><div className="event-detail-content">{error && <p className="muted">Could not refresh event detail; showing the event from the feed.</p>}{loading && <p className="muted">Loading full event and stock histories…</p>}<h3>{cleanText(detail.headline)}</h3><div className="detail-meta event-detail-meta"><span>{dateTime(eventTime(detail))}</span><span>{detail.metadata?.source || detail.metadata?.provider || "News wire"}</span><span className="news-category-chip"><NewsCategoryIcon category={detail.category}/>{detail.category?.replaceAll("_", " ") || "Uncategorized"}</span></div>{detail.text && <p className="event-fulltext">{cleanText(detail.text)}</p>}{detail.url && <a className="button-secondary source-button" href={detail.url} target="_blank" rel="noreferrer">Open source story ↗</a>}<section className="drawer-section"><h4>Model analysis</h4><div className="drawer-score-row"><SentimentMeter score={modelReady ? detail.sentiment?.score : null}/><span>Impact <b>{!modelReady ? "Pending" : impactScore(detail.sentiment?.impact_score)}</b></span>{analysisStatus(detail) !== "complete" && <span>Status <b>{analysisStatus(detail).replaceAll("_", " ")}</b></span>}</div><p className="muted">Sentiment describes the model’s reading of this story. It is not a forecast of price movement.</p></section><section className="drawer-section"><h4>Affected stocks</h4>{symbols.length ? <><div className="table-scroll event-stock-table-wrap"><table className="data-table event-stock-table"><thead><tr><th>Stock</th><th>Shares held</th><th className="numeric">Relevance</th><th className="numeric">Price</th><th className="numeric">Day</th></tr></thead><tbody>{symbols.slice(0, 5).map((item) => { const bars = priceHistories[item.ticker_id]?.bars || [], last = bars.at(-1), prev = bars.at(-2), change = last && prev ? (last.close / prev.close - 1) * 100 : null, held = (portfolios || []).map((portfolio) => ({ portfolio, position: (portfolio.positions || []).find((position) => String(position.ticker_id).toUpperCase() === String(item.ticker_id).toUpperCase()) })).filter(({ position }) => Number(position?.shares) > 0); return <tr key={item.ticker_id}><td><button className="ticker-link" onClick={() => onTicker(item.ticker_id)}>{item.ticker_id}</button></td><td>{held.length ? <div className="event-holding-list">{held.map(({ portfolio, position }) => <span className="event-holding-chip" key={portfolio.id}><b>{portfolio.news_enabled ? "News-aware" : "Normal"}</b>{number(position.shares, 0)}</span>)}</div> : <span className="muted">Not held</span>}</td><td className="numeric">{number(item.relevance_score, 2)}</td><td className="numeric">{last ? money(last.close) : "—"}</td><td className={`numeric ${changeClass(change)}`}>{percent(change, 2, false)}</td></tr>; })}</tbody></table></div>{symbols.slice(0, 5).map((item) => { const chart = priceHistories[item.ticker_id] || {}, bars = (chart.bars || []).filter((bar) => bar.close != null && Number.isFinite(Number(bar.close))), chartEvents = [...(chart.news || [])]; if (id && !chartEvents.some((item) => eventId(item) === id)) chartEvents.push(detail); const markers = tickerNewsMarkers(chartEvents, bars, item.ticker_id); if (bars.length < 2) return null; return <div className="event-stock-chart" key={`chart-${item.ticker_id}`}><h5>{item.ticker_id}: related news in price history</h5><PriceHistoryChart bars={bars} markers={markers} height={210}/><p>Hover a day marker to see all related stories and the one-day close-to-close return.</p></div>; })}</> : <p className="muted">No affected tickers have been identified.</p>}</section><EventPortfolioActions linkedOrders={linkedOrders} plans={actionablePlans} portfolios={portfolios} prices={prices} mergedPlanId={mergedPlanId} mergedPlan={mergedPlan} allPlans={plans}/></div></Drawer>;
 }
 
 function EventPortfolioActions({ linkedOrders, plans, portfolios, prices, mergedPlanId, mergedPlan, allPlans }) {
