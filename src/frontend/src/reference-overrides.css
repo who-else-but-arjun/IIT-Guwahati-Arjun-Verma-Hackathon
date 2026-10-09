@@ -1326,3 +1326,8 @@ canvas:focus-visible,
   .ledger-table-wrap,
   .order-table-wrap { min-height: 0 !important; }
 }
+
+.price-history-chart{position:relative}
+.price-chart-marker-tooltip{top:44px;right:8px;left:auto;transform:none;z-index:5}
+.ohlc-news-marker{cursor:pointer;outline:none}
+.ohlc-news-marker:focus-visible circle{stroke:var(--red);stroke-width:3}

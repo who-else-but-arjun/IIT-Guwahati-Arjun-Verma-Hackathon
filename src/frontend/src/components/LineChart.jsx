@@ -56,8 +56,9 @@ export function LineChart({ series = [], markers = [], mode = "value", dateRange
     {markerContent && <div className="chart-marker-tooltip" style={{ left: `${Math.min(76, Math.max(5, hoveredMarker.cx / width * 100))}%`, top: `${Math.min(68, Math.max(3, hoveredMarker.cy / height * 100))}%` }}>
       <span className="chart-marker-tooltip-kicker">{markerContent.kind === "rebalance" ? "REBALANCE ACTIVITY" : "NEWS EVENT"}</span>
       <b>{markerContent.headline || markerContent.label || "Portfolio event"}</b>
-      <small>{dateTime(markerContent.timestamp)}{markerContent.reason ? ` · ${formatReason(markerContent.reason)}` : ""}</small>
+      <small>{dateTime(markerContent.eventTimestamp || markerContent.timestamp)}{markerContent.reason ? ` · ${formatReason(markerContent.reason)}` : ""}</small>
       {markerEvents.slice(0, 2).map((event, i) => <span className="chart-marker-tooltip-line" key={event.id || event.event_id || i}>{event.headline}</span>)}
+      {markerContent.kind === "event" && <span className="chart-marker-tooltip-line">{markerContent.priceChangePct == null ? "Price change after news unavailable in this history" : "Price change after news: " + (markerContent.priceChangePct >= 0 ? "+" : "") + markerContent.priceChangePct.toFixed(2) + "%"}</span>}
       {markerContent.sentiment?.score != null && <span className="chart-marker-tooltip-line">Sentiment {number(markerContent.sentiment.score, 2)} · impact {markerContent.sentiment.impact_score == null ? "—" : impactScore(markerContent.sentiment.impact_score)}</span>}
       {markerOrders.length > 0 && <span className="chart-marker-tooltip-line">{markerOrders.length} trades · {markerOrders.reduce((sum, order) => sum + (Number(order.gross_value) || 0), 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} turnover</span>}
       {markerContent.kind === "event" && !markerEvents.length && markerContent.headline && <span className="chart-marker-tooltip-line">Sentiment {markerContent.sentiment?.score == null ? "—" : number(markerContent.sentiment.score, 2)} · {markerContent.category || "News"}</span>}
@@ -68,7 +69,8 @@ export function LineChart({ series = [], markers = [], mode = "value", dateRange
 
 export function PriceHistoryChart({ bars = [], markers = [], currency = "USD", height = 250, onViewChange }) {
   const [view, setView] = useState("line");
-  const validBars = (bars || []).filter((bar) => Number.isFinite(new Date(bar.timestamp || bar.date).getTime()) && Number.isFinite(Number(bar.close)));
+  const [hoveredPriceMarker, setHoveredPriceMarker] = useState(null);
+  const validBars = (bars || []).filter((bar) => bar.close != null && Number.isFinite(new Date(bar.timestamp || bar.date).getTime()) && Number.isFinite(Number(bar.close)));
   const lineSeries = [{ name: "Close", color: "var(--ink)", data: validBars.map((bar) => ({ timestamp: bar.timestamp || bar.date, value: Number(bar.close) })) }];
   const candleWidth = 920, pad = { l: 72, r: 22, t: 18, b: 42 };
   const highs = validBars.map((bar) => Number(bar.high ?? bar.close)).filter(Number.isFinite);
@@ -98,9 +100,10 @@ export function PriceHistoryChart({ bars = [], markers = [], currency = "USD", h
         const positive = close >= open, candleX = x(index), bodyTop = Math.min(y(open), y(close)), bodyHeight = Math.max(1.5, Math.abs(y(open) - y(close))), volumeHeight = (Number(bar.volume) || 0) / maxVolume * 24;
         return <g key={`${bar.timestamp || bar.date}-${index}`}><line x1={candleX} x2={candleX} y1={y(high)} y2={y(low)} className={positive ? "ohlc-wick up" : "ohlc-wick down"}/><rect x={candleX - 3.5} y={bodyTop} width="7" height={bodyHeight} className={positive ? "ohlc-body up" : "ohlc-body down"}><title>{`${new Date(bar.timestamp || bar.date).toLocaleString()} · O ${money(open, currency)} · H ${money(high, currency)} · L ${money(low, currency)} · C ${money(close, currency)} · Vol ${number(bar.volume, 0)}`}</title></rect><rect x={candleX - 3} y={height - pad.b - volumeHeight} width="6" height={volumeHeight} className={positive ? "ohlc-volume up" : "ohlc-volume down"}/></g>;
       })}
-      {markerIndexes.map((marker, index) => { const bar = validBars[marker.index]; return <g className="ohlc-news-marker" key={marker.id || index}><circle cx={x(marker.index)} cy={y(Number(bar.close))} r="4"><title>{marker.label || "News event"}</title></circle></g>; })}
+      {markerIndexes.map((marker, index) => { const bar = validBars[marker.index]; const cx = x(marker.index) + (Number(marker.offset) || 0); return <g className="ohlc-news-marker" key={marker.id || index} tabIndex="0" role="button" aria-label={marker.headline || marker.label || "News event"} onMouseEnter={() => setHoveredPriceMarker(marker)} onMouseLeave={() => setHoveredPriceMarker(null)} onFocus={() => setHoveredPriceMarker(marker)} onBlur={() => setHoveredPriceMarker(null)}><circle cx={cx} cy={y(Number(bar.close))} r="5"><title>{marker.headline || marker.label || "News event"}</title></circle></g>; })}
       {dateTicks.map((tick, index) => <text key={index} x={x(tick.index)} y={height - 11} textAnchor={index === 0 ? "start" : index === dateTicks.length - 1 ? "end" : "middle"} className="chart-axis chart-date-axis">{tick.label}</text>)}
     </svg>}
+    {view === "ohlc" && hoveredPriceMarker && <div className="chart-marker-tooltip price-chart-marker-tooltip"><span className="chart-marker-tooltip-kicker">RELATED NEWS</span><b>{hoveredPriceMarker.headline || hoveredPriceMarker.label}</b><small>{dateTime(hoveredPriceMarker.eventTimestamp || hoveredPriceMarker.timestamp)}</small><span className="chart-marker-tooltip-line">{hoveredPriceMarker.priceChangePct == null ? "Price change after news unavailable in this history" : "Price change after news: " + (hoveredPriceMarker.priceChangePct >= 0 ? "+" : "") + hoveredPriceMarker.priceChangePct.toFixed(2) + "%"}</span></div>}
     {view === "ohlc" && validBars.length >= 2 && <div className="ohlc-legend"><span><i className="ohlc-up-swatch"/>Close above open</span><span><i className="ohlc-down-swatch"/>Close below open</span><span><i className="ohlc-volume-swatch"/>Volume</span>{markers.length > 0 && <span><i className="ohlc-news-swatch"/>News publication</span>}</div>}
   </section>;
 }

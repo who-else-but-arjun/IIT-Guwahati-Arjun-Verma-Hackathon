@@ -72,8 +72,8 @@
   }
 }
 
-/* Keep ticker content stable on phones. CSS marquee transforms can disappear
-   during mobile browser compositing, so make the strips swipeable instead. */
+/* Keep ticker strips swipeable; AppShell advances scrollLeft on phones instead
+   of animating transforms, which can disappear during mobile compositing. */
 @media (max-width: 760px) {
   .rw,
   .pulse {

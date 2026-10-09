@@ -7,7 +7,10 @@ Laya package, which preserves the package's native checkpoint format.
 from __future__ import annotations
 
 import json
+import math
+import re
 import shutil
+from collections import Counter
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -196,7 +199,7 @@ def infer_laya(agent, states, question, *, batch_size=8):
 
 @torch.inference_mode()
 def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> list[dict[str, float | str]]:
-    """Rank the full configured universe by news/company-profile cosine similarity."""
+    """Shortlist stocks by fusing FLANG embedding similarity and BM25 entity terms."""
     tokenizer = getattr(model, "tokenizer", None)
     config = getattr(model, "task_config", None)
     if tokenizer is None or config is None or config.get("backend") != "cosine_embedding":
@@ -217,9 +220,69 @@ def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> lis
     cosine = torch.mv(profile_embeddings, article_embedding).clamp(-1.0, 1.0)
     temperature = max(float(config.get("temperature", STOCK_SELECTOR_TEMPERATURE)), 1e-4)
     relevance = torch.sigmoid(cosine / temperature)
-    indices = torch.topk(cosine, k=count).indices.tolist()
+    embedding_order = torch.argsort(cosine, descending=True).tolist()
+    keyword_scores = _bm25_company_scores(text, symbols)
+    keyword_order = sorted(
+        (index for index, score in enumerate(keyword_scores) if score > 0),
+        key=lambda index: keyword_scores[index], reverse=True,
+    )
+
+    # Reciprocal-rank fusion combines rankings without comparing the model's
+    # cosine probabilities directly with BM25's unbounded scores.
+    embedding_weight, keyword_weight, rank_constant = 0.65, 0.35, 60
+    embedding_ranks = {index: rank for rank, index in enumerate(embedding_order, start=1)}
+    keyword_ranks = {index: rank for rank, index in enumerate(keyword_order, start=1)}
+    fused_scores = [
+        embedding_weight / (rank_constant + embedding_ranks[index])
+        + keyword_weight / (rank_constant + keyword_ranks[index])
+        for index in range(len(symbols))
+    ]
+    selected = sorted(range(len(symbols)), key=lambda index: fused_scores[index], reverse=True)[:count]
+    max_fused = max((fused_scores[index] for index in selected), default=1.0)
     return [{"ticker": symbols[i], "relevance_score": float(relevance[i].item()),
-             "cosine_similarity": float(cosine[i].item())} for i in indices]
+             "cosine_similarity": float(cosine[i].item()),
+             "bm25_score": float(keyword_scores[i]),
+             "hybrid_score": float(fused_scores[i] / max_fused) if max_fused else 0.0}
+            for i in selected]
+
+
+def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
+                         b: float = 0.75) -> list[float]:
+    """Score article terms against each configured ticker and company name."""
+    def tokens(value: str) -> list[str]:
+        # Keep class tickers such as BRK.B together; one-character terms are
+        # handled separately because they are noisy in ordinary prose.
+        return [token for token in re.findall(r"[a-z0-9]+(?:\.[a-z0-9]+)?", value.lower())
+                if len(token) > 1]
+
+    query = Counter(tokens(str(text or "")))
+    query.update(symbol.lower() for symbol in re.findall(r"\$([A-Z])\b", str(text or ""), re.IGNORECASE))
+    documents = []
+    for symbol in symbols:
+        document = tokens(f"{symbol} {SP100_COMPANIES.get(symbol, '')}")
+        if len(symbol) == 1:
+            document.append(symbol.lower())
+        documents.append(document)
+    if not query or not documents:
+        return [0.0] * len(documents)
+    frequencies = [Counter(document) for document in documents]
+    document_frequency = Counter(term for counts in frequencies for term in counts)
+    average_length = sum(map(len, documents)) / len(documents) or 1.0
+    document_count = len(documents)
+    scores = []
+    for document, counts in zip(documents, frequencies):
+        length = len(document)
+        score = 0.0
+        for term, query_frequency in query.items():
+            term_frequency = counts.get(term, 0)
+            if not term_frequency:
+                continue
+            df = document_frequency[term]
+            inverse_frequency = math.log(1.0 + (document_count - df + 0.5) / (df + 0.5))
+            denominator = term_frequency + k1 * (1.0 - b + b * length / average_length)
+            score += inverse_frequency * (term_frequency * (k1 + 1.0) / denominator) * min(query_frequency, 3)
+        scores.append(score)
+    return scores
 
 
 @torch.inference_mode()

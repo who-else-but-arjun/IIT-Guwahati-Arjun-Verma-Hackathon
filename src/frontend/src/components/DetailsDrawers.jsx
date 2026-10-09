@@ -7,13 +7,84 @@ import { usePolling } from "../hooks/usePolling";
 import { changeClass, cleanText, dateTime, formatReason, impactScore, money, number, percent, timeAgo } from "../utils/format";
 import { RebalanceDetailDrawer } from "./RebalanceDrawer";
 
+const tickerNewsMarkers = (events = [], bars = [], symbol = "") => {
+  const ticker = String(symbol).toUpperCase();
+  const validBars = bars.filter((bar) => bar.close != null
+    && Number.isFinite(new Date(bar.timestamp || bar.date).getTime())
+    && Number.isFinite(Number(bar.close)));
+  const seen = new Set();
+  const markers = [];
+  const firstBarAt = new Date(validBars[0]?.timestamp || validBars[0]?.date).getTime();
+  const lastBarAt = new Date(validBars.at(-1)?.timestamp || validBars.at(-1)?.date).getTime();
+  for (const event of events || []) {
+    const id = eventId(event);
+    const publishedAt = new Date(eventTime(event)).getTime();
+    if (!Number.isFinite(publishedAt) || publishedAt < firstBarAt || publishedAt > lastBarAt
+      || !affectedTickers(event).some((item) => String(item.ticker_id).toUpperCase() === ticker)
+      || (id && seen.has(id))) continue;
+    const index = validBars.findIndex((bar) => new Date(bar.timestamp || bar.date).getTime() >= publishedAt);
+    if (index < 0) continue;
+    const previousClose = Number(validBars[index - 1]?.close);
+    const followingClose = Number(validBars[index]?.close);
+    const priceChangePct = index > 0 && previousClose > 0 && followingClose > 0
+      ? (followingClose / previousClose - 1) * 100 : null;
+    if (id) seen.add(id);
+    markers.push({
+      id: id || `${ticker}-${publishedAt}`,
+      index,
+      timestamp: validBars[index].timestamp || validBars[index].date,
+      eventTimestamp: eventTime(event),
+      priceChangePct,
+      kind: "event",
+      headline: cleanText(event.headline) || "News event",
+      label: cleanText(event.headline) || "News event",
+      event,
+    });
+  }
+  const byIndex = new Map();
+  markers.forEach((marker) => {
+    const group = byIndex.get(marker.index) || [];
+    group.push(marker);
+    byIndex.set(marker.index, group);
+  });
+  for (const group of byIndex.values()) group.forEach((marker, index) => {
+    marker.offset = (index - (group.length - 1) / 2) * 8;
+  });
+  return markers;
+};
+
+const tickerEventsInHistory = async (symbol, bars) => {
+  const first = bars[0]?.timestamp || bars[0]?.date;
+  if (!first) return [];
+  const events = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const result = await api.tickerEvents(symbol, {
+      limit: pageSize,
+      offset,
+      since: new Date(first).toISOString(),
+    });
+    const page = result.events || [];
+    events.push(...page);
+    if (page.length < pageSize || !page.length) break;
+  }
+  return events;
+};
+
 export function EventDrawer({ event, portfolios, orders, pending, prices = {}, onClose, onTicker }) {
   const id = eventId(event);
   const loader = useCallback(async () => {
     const detail = id ? await api.event(id) : event;
     const symbols = affectedTickers(detail).slice(0, 5).map((item) => item.ticker_id);
-    const results = await Promise.allSettled(symbols.map((symbol) => api.ticker(symbol, "3mo", "1d")));
-    return { detail, charts: Object.fromEntries(symbols.map((symbol, index) => [symbol, results[index].status === "fulfilled" ? results[index].value.ticker_data || [] : []])) };
+    const results = await Promise.allSettled(symbols.map(async (symbol) => {
+      const response = await api.ticker(symbol, "3mo", "1d");
+      const bars = response.ticker_data || [];
+      const news = await tickerEventsInHistory(symbol, bars).catch(() => []);
+      return { bars, news };
+    }));
+    return { detail, charts: Object.fromEntries(symbols.map((symbol, index) => [
+      symbol, results[index].status === "fulfilled" ? results[index].value : { bars: [], news: [] },
+    ])) };
   }, [id, event]);
   const { data, loading, error } = usePolling(loader, 0, [loader]);
   const [storedActivity, setStoredActivity] = useState({ orders: [], rebalances: [] });
@@ -53,7 +124,7 @@ export function EventDrawer({ event, portfolios, orders, pending, prices = {}, o
   const mergedPlanId = plans.map((plan) => /merged into plan\s+([a-f\d]+)/i.exec(plan.last_error || "")?.[1]).find(Boolean);
   const mergedPlan = mergedPlanId ? storedActivity.rebalances.find((plan) => plan.id === mergedPlanId) : null;
   const modelReady = analysisStatus(detail) === "complete";
-  return <Drawer title="Event brief" eyebrow="NEWS DETAIL" onClose={onClose}><div className="event-detail-content">{error && <p className="muted">Could not refresh event detail; showing the event from the feed.</p>}{loading && <p className="muted">Loading full event and stock histories…</p>}<h3>{cleanText(detail.headline)}</h3><div className="detail-meta event-detail-meta"><span>{dateTime(eventTime(detail))}</span><span>{detail.metadata?.source || detail.metadata?.provider || "News wire"}</span><span className="news-category-chip"><NewsCategoryIcon category={detail.category}/>{detail.category?.replaceAll("_", " ") || "Uncategorized"}</span></div>{detail.text && <p className="event-fulltext">{cleanText(detail.text)}</p>}{detail.url && <a className="button-secondary source-button" href={detail.url} target="_blank" rel="noreferrer">Open source story ↗</a>}<section className="drawer-section"><h4>Model analysis</h4><div className="drawer-score-row"><SentimentMeter score={modelReady ? detail.sentiment?.score : null}/><span>Impact <b>{!modelReady ? "Pending" : impactScore(detail.sentiment?.impact_score)}</b></span>{analysisStatus(detail) !== "complete" && <span>Status <b>{analysisStatus(detail).replaceAll("_", " ")}</b></span>}</div><p className="muted">Sentiment describes the model’s reading of this story. It is not a forecast of price movement.</p></section><section className="drawer-section"><h4>Affected stocks</h4>{symbols.length ? <><div className="table-scroll event-stock-table-wrap"><table className="data-table event-stock-table"><thead><tr><th>Stock</th><th>Shares held</th><th className="numeric">Relevance</th><th className="numeric">Price</th><th className="numeric">Day</th></tr></thead><tbody>{symbols.slice(0, 5).map((item) => { const bars = priceHistories[item.ticker_id] || [], last = bars.at(-1), prev = bars.at(-2), change = last && prev ? (last.close / prev.close - 1) * 100 : null, held = (portfolios || []).map((portfolio) => ({ portfolio, position: (portfolio.positions || []).find((position) => String(position.ticker_id).toUpperCase() === String(item.ticker_id).toUpperCase()) })).filter(({ position }) => Number(position?.shares) > 0); return <tr key={item.ticker_id}><td><button className="ticker-link" onClick={() => onTicker(item.ticker_id)}>{item.ticker_id}</button></td><td>{held.length ? <div className="event-holding-list">{held.map(({ portfolio, position }) => <span className="event-holding-chip" key={portfolio.id}><b>{portfolio.news_enabled ? "News-aware" : "Normal"}</b>{number(position.shares, 0)}</span>)}</div> : <span className="muted">Not held</span>}</td><td className="numeric">{number(item.relevance_score, 2)}</td><td className="numeric">{last ? money(last.close) : "—"}</td><td className={`numeric ${changeClass(change)}`}>{percent(change, 2, false)}</td></tr>; })}</tbody></table></div>{symbols.slice(0, 5).map((item) => { const bars = (priceHistories[item.ticker_id] || []).filter((bar) => Number.isFinite(Number(bar.close))); if (bars.length < 2) return null; const publishedAt = new Date(eventTime(detail)).getTime(), eventIndex = bars.reduce((best, bar, index) => Math.abs(new Date(bar.timestamp).getTime() - publishedAt) < Math.abs(new Date(bars[best]?.timestamp).getTime() - publishedAt) ? index : best, 0), after = bars[Math.min(eventIndex + 2, bars.length - 1)], observed = bars[eventIndex]?.close ? (after.close / bars[eventIndex].close - 1) * 100 : null; return <div className="event-stock-chart" key={`chart-${item.ticker_id}`}><h5>{item.ticker_id} around the event</h5><PriceHistoryChart bars={bars} markers={[{ id, index: eventIndex, kind: "event", label: `News published ${dateTime(eventTime(detail))}` }]} height={210}/><p>Observed {percent(observed, 2, false)} in the two sessions after the event. This shows movement after the news, not proof that the news caused it.</p></div>; })}</> : <p className="muted">No affected tickers have been identified.</p>}</section><EventPortfolioActions linkedOrders={linkedOrders} plans={actionablePlans} portfolios={portfolios} prices={prices} mergedPlanId={mergedPlanId} mergedPlan={mergedPlan} allPlans={plans}/></div></Drawer>;
+  return <Drawer title="Event brief" eyebrow="NEWS DETAIL" onClose={onClose}><div className="event-detail-content">{error && <p className="muted">Could not refresh event detail; showing the event from the feed.</p>}{loading && <p className="muted">Loading full event and stock histories…</p>}<h3>{cleanText(detail.headline)}</h3><div className="detail-meta event-detail-meta"><span>{dateTime(eventTime(detail))}</span><span>{detail.metadata?.source || detail.metadata?.provider || "News wire"}</span><span className="news-category-chip"><NewsCategoryIcon category={detail.category}/>{detail.category?.replaceAll("_", " ") || "Uncategorized"}</span></div>{detail.text && <p className="event-fulltext">{cleanText(detail.text)}</p>}{detail.url && <a className="button-secondary source-button" href={detail.url} target="_blank" rel="noreferrer">Open source story ↗</a>}<section className="drawer-section"><h4>Model analysis</h4><div className="drawer-score-row"><SentimentMeter score={modelReady ? detail.sentiment?.score : null}/><span>Impact <b>{!modelReady ? "Pending" : impactScore(detail.sentiment?.impact_score)}</b></span>{analysisStatus(detail) !== "complete" && <span>Status <b>{analysisStatus(detail).replaceAll("_", " ")}</b></span>}</div><p className="muted">Sentiment describes the model’s reading of this story. It is not a forecast of price movement.</p></section><section className="drawer-section"><h4>Affected stocks</h4>{symbols.length ? <><div className="table-scroll event-stock-table-wrap"><table className="data-table event-stock-table"><thead><tr><th>Stock</th><th>Shares held</th><th className="numeric">Relevance</th><th className="numeric">Price</th><th className="numeric">Day</th></tr></thead><tbody>{symbols.slice(0, 5).map((item) => { const bars = priceHistories[item.ticker_id]?.bars || [], last = bars.at(-1), prev = bars.at(-2), change = last && prev ? (last.close / prev.close - 1) * 100 : null, held = (portfolios || []).map((portfolio) => ({ portfolio, position: (portfolio.positions || []).find((position) => String(position.ticker_id).toUpperCase() === String(item.ticker_id).toUpperCase()) })).filter(({ position }) => Number(position?.shares) > 0); return <tr key={item.ticker_id}><td><button className="ticker-link" onClick={() => onTicker(item.ticker_id)}>{item.ticker_id}</button></td><td>{held.length ? <div className="event-holding-list">{held.map(({ portfolio, position }) => <span className="event-holding-chip" key={portfolio.id}><b>{portfolio.news_enabled ? "News-aware" : "Normal"}</b>{number(position.shares, 0)}</span>)}</div> : <span className="muted">Not held</span>}</td><td className="numeric">{number(item.relevance_score, 2)}</td><td className="numeric">{last ? money(last.close) : "—"}</td><td className={`numeric ${changeClass(change)}`}>{percent(change, 2, false)}</td></tr>; })}</tbody></table></div>{symbols.slice(0, 5).map((item) => { const chart = priceHistories[item.ticker_id] || {}, bars = (chart.bars || []).filter((bar) => bar.close != null && Number.isFinite(Number(bar.close))), chartEvents = [...(chart.news || [])]; if (id && !chartEvents.some((item) => eventId(item) === id)) chartEvents.push(detail); const markers = tickerNewsMarkers(chartEvents, bars, item.ticker_id); if (bars.length < 2) return null; return <div className="event-stock-chart" key={`chart-${item.ticker_id}`}><h5>{item.ticker_id}: related news in price history</h5><PriceHistoryChart bars={bars} markers={markers} height={210}/><p>Hover a marker for the headline and the price change from the prior close to the first daily close after publication.</p></div>; })}</> : <p className="muted">No affected tickers have been identified.</p>}</section><EventPortfolioActions linkedOrders={linkedOrders} plans={actionablePlans} portfolios={portfolios} prices={prices} mergedPlanId={mergedPlanId} mergedPlan={mergedPlan} allPlans={plans}/></div></Drawer>;
 }
 
 function EventPortfolioActions({ linkedOrders, plans, portfolios, prices, mergedPlanId, mergedPlan, allPlans }) {
@@ -152,7 +223,10 @@ export function StockDrawer({ symbol, portfolios, orders, tickers = [], onClose,
   const relatedNewsInitialSize = 20;
   const loader = useCallback(async () => {
     const [stock, news] = await Promise.allSettled([api.ticker(symbol, "3mo", "1d"), api.tickerEvents(symbol, { limit: 20 })]);
-    return { stock: stock.status === "fulfilled" ? stock.value : null, news: news.status === "fulfilled" ? news.value.events || [] : [], newsTotal: news.status === "fulfilled" ? news.value.total_count || 0 : 0, error: stock.status === "rejected" ? stock.reason.message : "" };
+    const stockData = stock.status === "fulfilled" ? stock.value : null;
+    const bars = stockData?.ticker_data || [];
+    const chartNews = stockData ? await tickerEventsInHistory(symbol, bars).catch(() => []) : [];
+    return { stock: stockData, news: news.status === "fulfilled" ? news.value.events || [] : [], chartNews, newsTotal: news.status === "fulfilled" ? news.value.total_count || 0 : 0, error: stock.status === "rejected" ? stock.reason.message : "" };
   }, [symbol]);
   const { data, loading, error } = usePolling(loader, 0, [loader]);
   useEffect(() => {
@@ -194,11 +268,7 @@ export function StockDrawer({ symbol, portfolios, orders, tickers = [], onClose,
     else loadTransactionPage(page);
   };
   const bars = stock?.ticker_data || [];
-  const chartMarkers = (data?.news || []).map((event) => {
-    const at = new Date(eventTime(event)).getTime();
-    const index = bars.reduce((best, bar, i) => Math.abs(new Date(bar.timestamp).getTime() - at) < Math.abs(new Date(bars[best]?.timestamp).getTime() - at) ? i : best, 0);
-    return { id: eventId(event), index, kind: "event", label: event.headline };
-  });
+  const chartMarkers = tickerNewsMarkers(data?.chartNews || [], bars, symbol);
   const currency = selectedPortfolio?.currency || "USD";
   const latest = bars.at(-1), previous = bars.at(-2);
   const dayChange = latest?.close && previous?.close ? (latest.close / previous.close - 1) * 100 : null;

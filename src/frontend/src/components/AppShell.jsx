@@ -22,7 +22,51 @@ export function AppShell({ page, onNavigate, health, quotes = [], quoteLoading =
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [alert, setAlert] = useState(null);
   const audioRef = useRef(null), previousIds = useRef(null), toastTimer = useRef(null);
+  const headlineRunnerRef = useRef(null), marketRunnerRef = useRef(null);
   const headlineEvents = events.slice(0, 20);
+  useEffect(() => {
+    const strips = [headlineRunnerRef, marketRunnerRef];
+    const media = window.matchMedia("(max-width: 760px)");
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let frame = 0, previousTime = 0, paused = false;
+    const pause = () => { paused = true; };
+    const resume = () => { paused = false; };
+    const tick = (time) => {
+      if (media.matches && !reducedMotion.matches && !document.hidden) {
+        const elapsed = previousTime ? Math.min(time - previousTime, 50) : 0;
+        if (!paused) strips.forEach((ref) => {
+          const strip = ref.current;
+          if (!strip) return;
+          const loopWidth = strip.scrollWidth / 2;
+          if (loopWidth > strip.clientWidth) {
+            strip.scrollLeft += elapsed * 0.024;
+            if (strip.scrollLeft >= loopWidth) strip.scrollLeft -= loopWidth;
+          }
+        });
+      }
+      previousTime = time;
+      frame = window.requestAnimationFrame(tick);
+    };
+    const options = { passive: true };
+    strips.forEach((ref) => {
+      ref.current?.addEventListener("pointerdown", pause, options);
+      ref.current?.addEventListener("touchstart", pause, options);
+    });
+    window.addEventListener("pointerup", resume, options);
+    window.addEventListener("pointercancel", resume, options);
+    window.addEventListener("touchend", resume, options);
+    frame = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      strips.forEach((ref) => {
+        ref.current?.removeEventListener("pointerdown", pause);
+        ref.current?.removeEventListener("touchstart", pause);
+      });
+      window.removeEventListener("pointerup", resume);
+      window.removeEventListener("pointercancel", resume);
+      window.removeEventListener("touchend", resume);
+    };
+  }, []);
   useEffect(() => {
     const ids = events.map(eventId).filter(Boolean);
     if (previousIds.current === null) { previousIds.current = new Set(ids); return; }
@@ -58,7 +102,7 @@ export function AppShell({ page, onNavigate, health, quotes = [], quoteLoading =
     if (value) { onTicker(value); setQuery(""); }
   };
   return <>
-    <div className="run" aria-label="Latest financial news"><b>LIVE · LATEST</b><div className="rw"><div className="rt" style={{ "--d": `${Math.max(120, headlineEvents.length * 24)}s` }}>{headlineEvents.length ? [...headlineEvents, ...headlineEvents].map((event, index) => <button key={`${eventId(event)}-${index}`} onClick={() => onEvent(event)}><span className="tm">{timeAgo(eventTime(event))}</span><b className="rh">{cleanText(event.headline) || "Headline unavailable"}</b>{affectedTickers(event).slice(0, 2).map((ticker) => { const quote = quotes.find((item) => String(item.ticker).toUpperCase() === String(ticker.ticker_id).toUpperCase()); return <span className="runner-stock" key={ticker.ticker_id}>{ticker.ticker_id}<em className={quote?.change > 0 ? "up" : quote?.change < 0 ? "dn" : ""}>{quote?.change == null ? "—" : `${quote.change > 0 ? "+" : ""}${quote.change.toFixed(2)}%`}</em></span>; })}</button>) : <span className="tm">Waiting for headlines from the news service</span>}</div></div></div>
+    <div className="run" aria-label="Latest financial news"><b>LIVE · LATEST</b><div className="rw" ref={headlineRunnerRef}><div className="rt" style={{ "--d": `${Math.max(120, headlineEvents.length * 24)}s` }}>{headlineEvents.length ? [...headlineEvents, ...headlineEvents].map((event, index) => <button key={`${eventId(event)}-${index}`} onClick={() => onEvent(event)}><span className="tm">{timeAgo(eventTime(event))}</span><b className="rh">{cleanText(event.headline) || "Headline unavailable"}</b>{affectedTickers(event).slice(0, 2).map((ticker) => { const quote = quotes.find((item) => String(item.ticker).toUpperCase() === String(ticker.ticker_id).toUpperCase()); return <span className="runner-stock" key={ticker.ticker_id}>{ticker.ticker_id}<em className={quote?.change > 0 ? "up" : quote?.change < 0 ? "dn" : ""}>{quote?.change == null ? "—" : `${quote.change > 0 ? "+" : ""}${quote.change.toFixed(2)}%`}</em></span>; })}</button>) : <span className="tm">Waiting for headlines from the news service</span>}</div></div></div>
     <header className="top">
       <a className="brand" href="/news" aria-label="CRISIL home" onClick={(event) => { event.preventDefault(); onNavigate("news"); }}><span className="brand-wordmark">CRIS<span className="brand-i">ı</span>L</span></a>
       <nav aria-label="Primary">{routes.map(([id, label]) => <a key={id} href={"/" + id} className={page === id ? "on" : ""} onClick={(event) => { event.preventDefault(); onNavigate(id); }}><svg className="nav-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{navPaths[id]}</svg><span>{label}</span></a>)}</nav>
@@ -67,7 +111,7 @@ export function AppShell({ page, onNavigate, health, quotes = [], quoteLoading =
       <button className={`sound-toggle ${soundEnabled ? "enabled" : ""}`} onClick={() => { if (!soundEnabled) { try { const AudioContextClass = window.AudioContext || window.webkitAudioContext; audioRef.current = audioRef.current || new AudioContextClass(); audioRef.current.resume(); } catch { /* Audio is optional. */ } } setSoundEnabled((value) => !value); }} aria-pressed={soundEnabled} aria-label={soundEnabled ? "Mute new story alerts" : "Enable sound for new story alerts"} title={soundEnabled ? "Mute new story alerts" : "Enable sound for new story alerts"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4Z"/>{soundEnabled ? <><path d="M16 9a4 4 0 0 1 0 6m2-8a7 7 0 0 1 0 10"/></> : <path d="m17 9 5 6m0-6-5 6"/>}</svg><i className="control-track"><b/></i></button>
       <span className={`connection-pill ${health === "ok" ? "connected" : ""}`} title={health === "ok" ? "News and portfolio services connected" : "One or more services are unavailable"}><i/>{health === "ok" ? "LIVE DATA" : "DATA STATUS"}</span>
     </header>
-      <div className="pulse" aria-label="Market pulse"><div className="pt">{quotes.length ? [...quotes, ...quotes].map((quote, index) => <button className="pi" key={`${quote.ticker}-${index}`} onClick={() => onTicker(quote.ticker)}><b>{quote.ticker}</b><strong>{Number.isFinite(Number(quote.price)) ? Number(quote.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}</strong><em className={quote.change > 0 ? "up" : quote.change < 0 ? "dn" : ""}>{quote.change == null ? "—" : `${quote.change > 0 ? "+" : ""}${quote.change.toFixed(2)}%`}</em>{quote.sparkline?.length > 1 && <svg className={`sk ${quote.change < 0 ? "dn" : "up"}`} viewBox="0 0 64 24" aria-label={`${quote.ticker} recent price trend`}><path d={sparkPath(quote.sparkline)}/></svg>}<span className="market-source">{quote.company || "Market data"}</span></button>) : quoteLoading ? <Skeleton variant="market" count={7} className="pulse-skeleton"/> : <span className="pi">Waiting for live market data from the configured source</span>}</div></div>
+      <div className="pulse" aria-label="Market pulse" ref={marketRunnerRef}><div className="pt">{quotes.length ? [...quotes, ...quotes].map((quote, index) => <button className="pi" key={`${quote.ticker}-${index}`} onClick={() => onTicker(quote.ticker)}><b>{quote.ticker}</b><strong>{Number.isFinite(Number(quote.price)) ? Number(quote.price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—"}</strong><em className={quote.change > 0 ? "up" : quote.change < 0 ? "dn" : ""}>{quote.change == null ? "—" : `${quote.change > 0 ? "+" : ""}${quote.change.toFixed(2)}%`}</em>{quote.sparkline?.length > 1 && <svg className={`sk ${quote.change < 0 ? "dn" : "up"}`} viewBox="0 0 64 24" aria-label={`${quote.ticker} recent price trend`}><path d={sparkPath(quote.sparkline)}/></svg>}<span className="market-source">{quote.company || "Market data"}</span></button>) : quoteLoading ? <Skeleton variant="market" count={7} className="pulse-skeleton"/> : <span className="pi">Waiting for live market data from the configured source</span>}</div></div>
     <div className="stat"><span><i className={`dot ${health === "ok" ? "up" : ""}`}/><b>{health === "ok" ? "Connected" : "Service status"}</b> · news and portfolio services</span><span><b>{updatedAt ? `Prices updated ${timeAgo(updatedAt)}` : "Market prices"}</b></span><span className="paper-context">Paper trading environment</span></div>
     <main id="app" className="page-main">{children}</main>
     {alert && <button className="news-toast" onClick={() => { onEvent(alert); setAlert(null); }} aria-live="polite"><span className="toast-live"><i/>NEW STORY</span><b>{cleanText(alert.headline) || "New market story"}</b><small>{affectedTickers(alert).slice(0, 3).map((ticker) => ticker.ticker_id).join(" · ") || "Open news brief"} · Click to view</small><span className="toast-close" onClick={(event) => { event.stopPropagation(); setAlert(null); }}>×</span></button>}
