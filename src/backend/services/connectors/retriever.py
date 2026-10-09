@@ -189,10 +189,21 @@ def main():
                 ",".join(item.ticker_id for item in article.relevant_tickers),
                 article.headline,
             )
+        def bluesky_finance_filter(article):
+            # Share the model suite through its single analysis executor so
+            # streaming Laya calls cannot race queued sentiment inference.
+            try:
+                return executor.submit(
+                    workflow.models.is_financial_news, article.headline, article.text,
+                ).result()
+            except Exception:
+                logger.exception("FLANG-Laya could not classify Bluesky post; dropping it before persistence.")
+                return False
         stream = (
             AlpacaNewsStream(save_article, symbols=args.symbols)
             if args.command == "listen"
-            else BlueskyNewsStream(save_article, symbols=args.symbols)
+            else BlueskyNewsStream(save_article, symbols=args.symbols,
+                                   finance_filter=bluesky_finance_filter)
         )
         signal.signal(signal.SIGINT, lambda *_: stream.stop())
         signal.signal(signal.SIGTERM, lambda *_: stream.stop())

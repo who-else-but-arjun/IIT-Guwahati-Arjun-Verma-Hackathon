@@ -9,7 +9,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
-from typing import Mapping
+from typing import Callable, Mapping
 from urllib.parse import urlencode
 
 import websocket
@@ -25,9 +25,11 @@ logger = logging.getLogger(__name__)
 class BlueskyNewsStream(NewsConnector):
     """Listen to public post events and emit posts mentioning S&P 100 names."""
 
-    def __init__(self, on_article, *, symbols=None, url: str | None = None):
+    def __init__(self, on_article, *, symbols=None, url: str | None = None,
+                 finance_filter: Callable[[NewsEventDTO], bool] | None = None):
         super().__init__(on_article, symbols=symbols)
         self.base_url = url or os.getenv("BLUESKY_JETSTREAM_URL", BLUESKY_JETSTREAM_URL)
+        self.finance_filter = finance_filter
         self._stop = threading.Event()
         self._app: websocket.WebSocketApp | None = None
         self._rate_lock = threading.Lock()
@@ -36,7 +38,7 @@ class BlueskyNewsStream(NewsConnector):
         self._max_posts_per_hour = max(1, int(os.getenv("BLUESKY_MAX_POSTS_PER_HOUR", "4")))
         self._max_posts_per_author_hour = max(1, int(os.getenv("BLUESKY_MAX_POSTS_PER_AUTHOR_PER_HOUR", "1")))
 
-    def _within_rate_limit(self, author: str) -> bool:
+    def _within_rate_limit(self, author: str, *, record: bool = True) -> bool:
         now = time.monotonic()
         cutoff = now - 3600
         with self._rate_lock:
@@ -48,8 +50,9 @@ class BlueskyNewsStream(NewsConnector):
             if (len(self._accepted_posts) >= self._max_posts_per_hour
                     or len(author_posts) >= self._max_posts_per_author_hour):
                 return False
-            self._accepted_posts.append(now)
-            author_posts.append(now)
+            if record:
+                self._accepted_posts.append(now)
+                author_posts.append(now)
             return True
 
     def normalize(self, event: Mapping[str, object], context: object | None = None) -> NewsEventDTO | None:
@@ -72,7 +75,7 @@ class BlueskyNewsStream(NewsConnector):
         related = extract_sp100_symbols(post_text)
         if not related:
             return None
-        if not self._within_rate_limit(did):
+        if self.finance_filter is not None and not self._within_rate_limit(did, record=False):
             return None
 
         at_uri = f"at://{did}/app.bsky.feed.post/{rkey}"
@@ -100,7 +103,20 @@ class BlueskyNewsStream(NewsConnector):
             "post_cid": str(commit.get("cid") or ""),
             "text_kind": "social_post",
         }
-        return article.model_copy(update={"metadata": metadata})
+        article = article.model_copy(update={"metadata": metadata})
+        if self.finance_filter is not None:
+            try:
+                if not self.finance_filter(article):
+                    logger.info("Discarding non-financial Bluesky post %s before database insert.", at_uri)
+                    return None
+            except Exception:
+                # Fail closed: a post without an affirmative Laya decision must
+                # never enter the persisted news queue.
+                logger.exception("FLANG-Laya finance filter failed for Bluesky post %s; dropping it.", at_uri)
+                return None
+        if not self._within_rate_limit(did):
+            return None
+        return article
 
     def _on_open(self, _ws):
         logger.info("Connected to Bluesky Jetstream for S&P 100 related posts.")

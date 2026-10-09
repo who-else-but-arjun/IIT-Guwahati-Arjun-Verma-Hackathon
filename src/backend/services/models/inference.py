@@ -118,6 +118,34 @@ class FinancialNewsModelSuite:
         impact = max(0.0, min(1.0, float(impact_output) / 10.0))
         return category, impact
 
+    def is_financial_news(self, headline: str, text: str) -> bool:
+        """Use FLANG-Laya to accept only substantive financial Bluesky posts."""
+        self.ensure_loaded()
+        article_text = self.prepare_article_text(headline, text)
+        question = {
+            "type": "choice",
+            "instructions": (
+                "Decide whether this social post contains substantive financial news "
+                "about a company, security, market, or economy. Answer yes only for "
+                "a factual or material financial update; answer no for casual ticker "
+                "mentions, opinions without news, jokes, promotions, and product ads."
+            ),
+            "criteria": {
+                "yes": "The post reports a concrete financial or market development, company event, earnings update, regulatory action, or material business news.",
+                "no": "The post is not substantive financial news, or only mentions a ticker/company casually, promotionally, or without a concrete update.",
+            },
+        }
+        outputs = self.laya_infer(
+            self._models["laya"], [{"article": article_text}], question, batch_size=1,
+        )
+        if not outputs:
+            raise ValueError("FLANG-Laya returned no finance relevance decision for Bluesky post.")
+        choice = outputs[0].get("answers", {}).get("sentiment", {}).get("choice")
+        normalized = str(choice or "").strip().lower()
+        if normalized not in {"yes", "no"}:
+            raise ValueError(f"FLANG-Laya returned an invalid Bluesky finance decision: {choice!r}.")
+        return normalized == "yes"
+
     def select_and_score_tickers(self, article_text: str) -> list[ScoredTickerCandidate]:
         self.ensure_loaded()
         selector = self._models["stock_selector"]
