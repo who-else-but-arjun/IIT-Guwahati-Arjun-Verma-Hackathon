@@ -216,7 +216,7 @@ def infer_laya(agent, states, question, *, batch_size=8):
 
 
 @torch.inference_mode()
-def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> list[dict[str, float | str]]:
+def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> list[dict[str, float | str | bool]]:
     """Shortlist stocks by fusing FLANG embedding similarity and BM25 entity terms."""
     tokenizer = getattr(model, "tokenizer", None)
     config = getattr(model, "task_config", None)
@@ -240,6 +240,7 @@ def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> lis
     relevance = torch.sigmoid(cosine / temperature)
     embedding_order = torch.argsort(cosine, descending=True).tolist()
     keyword_scores = _bm25_company_scores(text, symbols)
+    exact_company_matches = _exact_company_name_matches(text, symbols)
     keyword_order = sorted(
         (index for index, score in enumerate(keyword_scores) if score > 0),
         key=lambda index: keyword_scores[index], reverse=True,
@@ -261,37 +262,66 @@ def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> lis
             embedding_weight / (rank_constant + embedding_ranks[index])
             + keyword_contribution
         )
-    selected = sorted(range(len(symbols)), key=lambda index: fused_scores[index], reverse=True)[:count]
+    selected = sorted(
+        range(len(symbols)),
+        key=lambda index: (symbols[index] in exact_company_matches, fused_scores[index]),
+        reverse=True,
+    )[:count]
     max_fused = max((fused_scores[index] for index in selected), default=1.0)
     return [{"ticker": symbols[i], "relevance_score": float(relevance[i].item()),
              "cosine_similarity": float(cosine[i].item()),
              "bm25_score": float(keyword_scores[i]),
+             "company_name_match": symbols[i] in exact_company_matches,
              "hybrid_score": float(fused_scores[i] / max_fused) if max_fused else 0.0}
             for i in selected]
 
 
+_COMPANY_MATCH_STOP_WORDS = {
+    "the", "inc", "incorporated", "corp", "corporation", "company", "co",
+    "limited", "ltd", "plc", "llc", "group", "holding", "holdings", "class",
+    "technology", "technologies", "system", "systems", "service", "services",
+    "international", "global", "industries", "industrial", "products", "brands",
+    "energy", "health", "financial", "bank", "american", "united", "general",
+}
+_COMPANY_LEGAL_SUFFIXES = {
+    "inc", "incorporated", "corp", "corporation", "company", "co", "limited",
+    "ltd", "plc", "llc", "group", "holding", "holdings",
+}
+
+
+def _entity_tokens(value: str) -> list[str]:
+    """Normalize company names and article text to comparable word tokens."""
+    return re.findall(r"[a-z0-9]+", str(value or "").lower())
+
+
+def _company_name_tokens(symbol: str) -> list[str]:
+    name = _entity_tokens(SP100_COMPANIES.get(symbol, ""))
+    if name and name[0] == "the":
+        name = name[1:]
+    while name and name[-1] in _COMPANY_LEGAL_SUFFIXES:
+        name.pop()
+    return name
+
+
+def _exact_company_name_matches(text: str, symbols: Sequence[str]) -> set[str]:
+    """Find configured company names as whole normalized phrases."""
+    article = _entity_tokens(text)
+    matches = set()
+    for symbol in symbols:
+        phrase = _company_name_tokens(symbol)
+        if phrase and any(article[start:start + len(phrase)] == phrase
+                          for start in range(len(article) - len(phrase) + 1)):
+            matches.add(symbol)
+    return matches
+
+
 def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
                          b: float = 0.75) -> list[float]:
-    """Score distinctive company names and explicit ticker mentions.
-
-    Short ticker symbols are highly ambiguous in prose (for example, ``GS``).
-    They only contribute when written as a cashtag or alongside nearby market
-    language. Company-name matching ignores generic corporate words.
-    """
+    """Rank company-name terms and ticker mentions from the configured universe."""
     raw_text = str(text or "")
-    def tokens(value: str) -> list[str]:
-        return re.findall(r"[a-z0-9]+(?:\.[a-z0-9]+)?", value.lower())
-
-    generic_terms = {
-        "the", "inc", "incorporated", "corp", "corporation", "company", "co",
-        "limited", "ltd", "plc", "llc", "group", "holding", "holdings", "class",
-        "technology", "technologies", "system", "systems", "service", "services",
-        "international", "global", "industries", "industrial", "products", "brands",
-        "energy", "health", "financial", "bank", "american", "united", "general",
-    }
-    article_tokens = tokens(raw_text)
+    article_tokens = _entity_tokens(raw_text)
     query = Counter(token for token in article_tokens
-                    if len(token) > 2 and token not in generic_terms)
+                    if len(token) > 2 and token not in _COMPANY_MATCH_STOP_WORDS)
     cashtags = {match.upper().replace("-", ".") for match in
                 re.findall(r"(?<![A-Za-z0-9])\$([A-Z][A-Z0-9.-]{0,6})\b", raw_text)}
     context_pattern = re.compile(
@@ -305,23 +335,9 @@ def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
             explicit_tickers.add(symbol)
         elif context_pattern.search(raw_text[max(0, match.start() - 24):match.end() + 24]):
             explicit_tickers.add(symbol)
-    documents = []
-    company_aliases = []
-    legal_suffixes = {
-        "inc", "incorporated", "corp", "corporation", "company", "co",
-        "limited", "ltd", "plc", "llc", "group", "holding", "holdings",
-    }
-    for symbol in symbols:
-        company_tokens = tokens(SP100_COMPANIES.get(symbol, ""))
-        document = [token for token in company_tokens
-                    if len(token) > 2 and token not in generic_terms]
-        documents.append(document)
-        alias = list(company_tokens)
-        while alias and alias[0] == "the":
-            alias.pop(0)
-        while alias and alias[-1] in legal_suffixes:
-            alias.pop()
-        company_aliases.append(alias)
+    documents = [[token for token in _company_name_tokens(symbol)
+                  if len(token) > 2 and token not in _COMPANY_MATCH_STOP_WORDS]
+                 for symbol in symbols]
     if not documents or (not query and not explicit_tickers and not article_tokens):
         return [0.0] * len(documents)
     frequencies = [Counter(document) for document in documents]
@@ -329,7 +345,8 @@ def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
     average_length = sum(map(len, documents)) / len(documents) or 1.0
     document_count = len(documents)
     scores = []
-    for symbol, document, counts, alias in zip(symbols, documents, frequencies, company_aliases):
+    exact_names = _exact_company_name_matches(raw_text, symbols)
+    for symbol, document, counts in zip(symbols, documents, frequencies):
         length = len(document)
         score = 0.0
         for term, query_frequency in query.items():
@@ -344,10 +361,9 @@ def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
             # One explicit symbol is a strong lexical hit, without treating
             # ordinary two-letter words as securities.
             score += 4.0
-        if alias and any(article_tokens[start:start + len(alias)] == alias
-                         for start in range(len(article_tokens) - len(alias) + 1)):
-            # Exact normalized company-name phrases preserve valid dictionary
-            # matches such as "Bank of America" without matching "bank" alone.
+        if symbol in exact_names:
+            # Exact names get a strong lexical rank, without matching generic
+            # words such as "bank" or "company" on their own.
             score += 8.0
         scores.append(score)
     return scores

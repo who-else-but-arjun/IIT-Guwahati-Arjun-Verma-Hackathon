@@ -15,6 +15,8 @@ from dto.news import SentimentTag
 from .model_io import infer_laya, infer_stock_candidates, infer_text, load_model
 from constants import STOCK_SELECTOR_TOP_K, SP100_COMPANIES, NewsCategory
 
+MIN_STOCK_RELEVANCE = 0.30
+
 
 class ScoredTickerCandidate(BaseModel):
     ticker_id: str
@@ -172,6 +174,8 @@ class FinancialNewsModelSuite:
             for candidate in shortlisted
         ]
         outputs = self.laya_infer(self._models["laya"], states, question, batch_size=8)
+        if len(outputs) != len(shortlisted):
+            raise ValueError("FLANG-Laya returned fewer scores than stock-selector candidates.")
         candidates: list[ScoredTickerCandidate] = []
         for candidate, output in zip(shortlisted, outputs):
             answers = output.get("answers", {})
@@ -179,13 +183,13 @@ class FinancialNewsModelSuite:
             if not isinstance(answer, dict) or "noul" not in answer:
                 raise ValueError(f"FLANG-Laya response is missing relevance for {candidate['ticker']}.")
             relevance = max(0.0, min(1.0, float(answer["noul"])))
+            if relevance < MIN_STOCK_RELEVANCE:
+                continue
             candidates.append(ScoredTickerCandidate(
                 ticker_id=str(candidate["ticker"]),
                 selector_score=max(0.0, min(1.0, float(candidate["relevance_score"]))),
                 relevance_score=relevance,
             ))
-        if len(candidates) != len(shortlisted):
-            raise ValueError("FLANG-Laya returned fewer scores than stock-selector candidates.")
         return candidates
 
 
