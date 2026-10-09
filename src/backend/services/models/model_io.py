@@ -250,11 +250,17 @@ def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> lis
     embedding_weight, keyword_weight, rank_constant = 0.65, 0.35, 60
     embedding_ranks = {index: rank for rank, index in enumerate(embedding_order, start=1)}
     keyword_ranks = {index: rank for rank, index in enumerate(keyword_order, start=1)}
-    fused_scores = [
-        embedding_weight / (rank_constant + embedding_ranks[index])
-        + keyword_weight / (rank_constant + keyword_ranks[index])
-        for index in range(len(symbols))
-    ]
+    fused_scores = []
+    for index in range(len(symbols)):
+        keyword_rank = keyword_ranks.get(index)
+        keyword_contribution = (
+            keyword_weight / (rank_constant + keyword_rank)
+            if keyword_rank is not None else 0.0
+        )
+        fused_scores.append(
+            embedding_weight / (rank_constant + embedding_ranks[index])
+            + keyword_contribution
+        )
     selected = sorted(range(len(symbols)), key=lambda index: fused_scores[index], reverse=True)[:count]
     max_fused = max((fused_scores[index] for index in selected), default=1.0)
     return [{"ticker": symbols[i], "relevance_score": float(relevance[i].item()),
