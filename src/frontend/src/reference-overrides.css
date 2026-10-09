@@ -1336,3 +1336,24 @@ canvas:focus-visible,
 .chart-news-item{display:grid;gap:2px;padding-bottom:5px;border-bottom:1px solid var(--line)}
 .chart-news-item>b{font-size:10px;line-height:1.35;white-space:normal;overflow-wrap:anywhere}
 .chart-news-item>small{font-size:9px}
+
+/* On phones, native scrolling drives each runner; disable its desktop transform. */
+@media (max-width: 760px) {
+  .run .rw,
+  .pulse {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+  }
+  .run .rw::-webkit-scrollbar,
+  .pulse::-webkit-scrollbar { display: none; }
+  .run .rt,
+  .pulse .pt {
+    width: max-content;
+    animation: none !important;
+    transform: none !important;
+    will-change: auto;
+  }
+}
