@@ -141,6 +141,7 @@ def replay_portfolio(repository, portfolio: Portfolio | None = None, *,
         session = session_dates[index]
         open_row = opens.loc[session]
         close_row = closes.loc[session]
+        session_order_start = len(order_rows)
         plan = pending_targets.pop(session, None)
         todays_news = news_by_session.pop(session.date(), [])
         if plan or todays_news:
@@ -174,7 +175,7 @@ def replay_portfolio(repository, portfolio: Portfolio | None = None, *,
         _mark_close(portfolio, close_row)
         benchmark_value = portfolio.initial_capital * float(benchmark.loc[session]) / float(portfolio.benchmark_initial_price)
         portfolio.benchmark_value = benchmark_value
-        _record_session(portfolio, session, benchmark_value)
+        _record_session(portfolio, session, benchmark_value, order_rows[session_order_start:])
         processed_days += 1
 
         warmup_end = portfolio.config.rs_lookback_days - 1
@@ -428,7 +429,8 @@ def _mark_close(portfolio: Portfolio, close_row: pd.Series) -> None:
         position.weight = position.market_value / portfolio.portfolio_value if portfolio.portfolio_value else 0.0
 
 
-def _record_session(portfolio: Portfolio, session: pd.Timestamp, benchmark_value: float) -> None:
+def _record_session(portfolio: Portfolio, session: pd.Timestamp, benchmark_value: float,
+                    session_orders: list[TradeOrder] | None = None) -> None:
     total = portfolio.portfolio_value
     previous = portfolio.value_history[-1].total_value if portfolio.value_history else portfolio.initial_capital
     daily_return = total / previous - 1.0 if previous else 0.0
@@ -449,6 +451,8 @@ def _record_session(portfolio: Portfolio, session: pd.Timestamp, benchmark_value
         drawdown=min(0.0, total / peak - 1.0), annualized_volatility=volatility,
         sharpe_ratio=sharpe, realized_pnl=portfolio.total_realized_pnl,
         unrealized_pnl=portfolio.total_unrealized_pnl,
+        turnover=(sum(order.gross_value for order in session_orders or []) / previous if previous else 0.0),
+        transaction_cost=sum(order.transaction_cost for order in session_orders or []),
         benchmark_return=(benchmark_value / portfolio.value_history[-1].benchmark_value - 1.0)
         if portfolio.value_history and portfolio.value_history[-1].benchmark_value else None,
     ))

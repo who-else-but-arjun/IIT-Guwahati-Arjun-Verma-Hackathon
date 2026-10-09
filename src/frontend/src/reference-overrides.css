@@ -1357,3 +1357,5 @@ canvas:focus-visible,
     will-change: auto;
   }
 }
+
+.analysis-portfolio>h3{font-size:13px;margin:18px 12px 8px;color:var(--mut);font-weight:700}.analysis-portfolio:first-of-type>h3{margin-top:0}

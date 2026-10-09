@@ -233,8 +233,49 @@ class PortfolioService:
                 events = self.repository.get_completed_news_events(
                     row.id, checkpoint_close, datetime.now(timezone.utc), max_per_day=10,
                 )
-            results.append(replay_portfolio(self.repository, row, news_events=events))
+            replay_result = replay_portfolio(self.repository, row, news_events=events)
+            row = replay_result[0]
+            if self._backfill_daily_trade_metrics(row):
+                self.repository.save_portfolio(row)
+            results.append(replay_result)
         return results
+
+    def _backfill_daily_trade_metrics(self, portfolio: Portfolio) -> bool:
+        """Repair turnover and cost values on stored replay days using their saved fills."""
+        from math import isclose
+
+        def session_date(value: datetime):
+            aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+            return aware.astimezone(NEW_YORK).date()
+
+        orders = self.repository.list_orders(portfolio.id, limit=10_000)
+        totals: dict[object, list[float]] = {}
+        for order in orders:
+            day = session_date(order.created_at)
+            row = totals.setdefault(day, [0.0, 0.0])
+            row[0] += order.gross_value
+            row[1] += order.transaction_cost
+
+        values_by_day = {session_date(point.timestamp): point.total_value for point in portfolio.value_history}
+        metric_days = sorted({session_date(metric.date) for metric in portfolio.daily_metrics})
+        prior_values: dict[object, float] = {}
+        previous_value = portfolio.initial_capital
+        for day in metric_days:
+            prior_values[day] = previous_value
+            previous_value = values_by_day.get(day, previous_value)
+
+        changed = False
+        for metric in portfolio.daily_metrics:
+            day = session_date(metric.date)
+            values = totals.get(day, [0.0, 0.0])
+            denominator = prior_values.get(day, 0.0)
+            turnover = values[0] / denominator if denominator > 0 else 0.0
+            if (not isclose(metric.turnover, turnover, rel_tol=1e-9, abs_tol=1e-12)
+                    or not isclose(metric.transaction_cost, values[1], rel_tol=1e-9, abs_tol=1e-8)):
+                metric.turnover = max(0.0, turnover)
+                metric.transaction_cost = max(0.0, values[1])
+                changed = True
+        return changed
 
     def refresh_active_portfolios(self) -> None:
         """Refresh live marks and metrics without changing target positions."""
