@@ -289,7 +289,8 @@ def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
         "international", "global", "industries", "industrial", "products", "brands",
         "energy", "health", "financial", "bank", "american", "united", "general",
     }
-    query = Counter(token for token in tokens(raw_text)
+    article_tokens = tokens(raw_text)
+    query = Counter(token for token in article_tokens
                     if len(token) > 2 and token not in generic_terms)
     cashtags = {match.upper().replace("-", ".") for match in
                 re.findall(r"(?<![A-Za-z0-9])\$([A-Z][A-Z0-9.-]{0,6})\b", raw_text)}
@@ -302,22 +303,33 @@ def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
         symbol = match.group(1).upper().replace("-", ".")
         if len(symbol) >= 3:
             explicit_tickers.add(symbol)
-        elif context_pattern.search(raw_text[max(0, match.start() - 48):match.end() + 48]):
+        elif context_pattern.search(raw_text[max(0, match.start() - 24):match.end() + 24]):
             explicit_tickers.add(symbol)
     documents = []
+    company_aliases = []
+    legal_suffixes = {
+        "inc", "incorporated", "corp", "corporation", "company", "co",
+        "limited", "ltd", "plc", "llc", "group", "holding", "holdings",
+    }
     for symbol in symbols:
         company_tokens = tokens(SP100_COMPANIES.get(symbol, ""))
         document = [token for token in company_tokens
                     if len(token) > 2 and token not in generic_terms]
         documents.append(document)
-    if (not query and not explicit_tickers) or not documents:
+        alias = list(company_tokens)
+        while alias and alias[0] == "the":
+            alias.pop(0)
+        while alias and alias[-1] in legal_suffixes:
+            alias.pop()
+        company_aliases.append(alias)
+    if not documents or (not query and not explicit_tickers and not article_tokens):
         return [0.0] * len(documents)
     frequencies = [Counter(document) for document in documents]
     document_frequency = Counter(term for counts in frequencies for term in counts)
     average_length = sum(map(len, documents)) / len(documents) or 1.0
     document_count = len(documents)
     scores = []
-    for document, counts in zip(documents, frequencies):
+    for symbol, document, counts, alias in zip(symbols, documents, frequencies, company_aliases):
         length = len(document)
         score = 0.0
         for term, query_frequency in query.items():
@@ -332,6 +344,11 @@ def _bm25_company_scores(text: str, symbols: Sequence[str], *, k1: float = 1.5,
             # One explicit symbol is a strong lexical hit, without treating
             # ordinary two-letter words as securities.
             score += 4.0
+        if alias and any(article_tokens[start:start + len(alias)] == alias
+                         for start in range(len(article_tokens) - len(alias) + 1)):
+            # Exact normalized company-name phrases preserve valid dictionary
+            # matches such as "Bank of America" without matching "bank" alone.
+            score += 8.0
         scores.append(score)
     return scores
 
