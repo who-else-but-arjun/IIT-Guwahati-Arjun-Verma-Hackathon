@@ -19,26 +19,7 @@ The system combines task-specific FLANG-RoBERTa models with Jev for flexible cat
 
 ### System design and data flow
 
-```mermaid
-flowchart LR
-    FH[Finnhub poller] --> ING[News ingestion services]
-    AL[Alpaca news stream] --> ING
-    BS[Bluesky stream] --> ING
-    ING --> DB[(MongoDB: articles, tickers, portfolios)]
-    DB --> W[Persistent analysis worker]
-    W --> ML[FLANG-RoBERTa and FLANG-Laya]
-    W --> JV[Jev API, when configured]
-    ML --> DB
-    JV --> DB
-    W -->|analyzed news event| TE[Trading API and portfolio engine]
-    TE --> DB
-    YF[Yahoo Finance market data] --> TE
-    UI[React dashboard] -->|REST API| API[News API and Trading API]
-    API --> DB
-    API --> RC[(Redis cache)]
-    C[Caddy HTTPS reverse proxy] --> API
-    UI -. hosted separately .-> P[Cloudflare Pages]
-```
+![High Level Architecture Diagram](docs/HLD.png)
 
 ### MongoDB document schemas
 
