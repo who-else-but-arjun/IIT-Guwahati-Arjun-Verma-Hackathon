@@ -37,7 +37,7 @@ The MongoDB documents used by the application are illustrated below.
 - **Backend:** Python 3.11, Django 5.1, Gunicorn, Django REST endpoints.
 - **Data and cache:** MongoDB 7 for news, tickers, and paper-trading state; Redis 7 for caching.
 - **Analysis:** PyTorch, Hugging Face Transformers, FLANG-RoBERTa, FLANG-Laya, KaggleHub for storing models, and optional Jev API access.
-- **News and market data:** ![Finnhub](https://finnhub.io/dashboard), ![Alpaca news](https://app.alpaca.markets/), ![Bluesky](https://bsky.app/), and ![Yahoo Finance](https://finance.yahoo.com/).
+- **News and market data:** [Finnhub](https://finnhub.io/dashboard), [Alpaca News](https://app.alpaca.markets/), [Bluesky](https://bsky.app/), and [Yahoo Finance](https://finance.yahoo.com/).
 - **Runtime and deployment:** Docker Compose. Production uses Caddy for HTTPS and Cloudflare Pages for the frontend, Oracle Cloud (Free Tier) for VM/Backend.
 
 ## 3. Dataset Used
