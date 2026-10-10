@@ -141,7 +141,7 @@ Saved notebook evaluations report the following results. These are offline bench
 
 The business value is a reviewable prototype for organizing financial news by company and sentiment, surfacing candidate ticker relevance, and exploring possible portfolio effects using simulated trades. Human review and broader, consistently split evaluation are needed before using the outputs for investment decisions.
 
-<img width="1879" height="720" alt="Results" src="https://github.com/user-attachments/assets/d830071c-19ca-4881-951a-eaf074c56103" />
+<img width="1826" height="693" alt="image" src="https://github.com/user-attachments/assets/7dc6e8d7-cb92-43f2-a43a-be6757953827" />
 
 ---
 
