@@ -77,8 +77,6 @@ services:
       - ./src/backend:/app
       - model_store:/models
     depends_on:
-      init:
-        condition: service_completed_successfully
       mongo:
         condition: service_healthy
       trading:
@@ -105,8 +103,6 @@ services:
     volumes:
       - ./src/backend:/app
     depends_on:
-      init:
-        condition: service_completed_successfully
       mongo:
         condition: service_healthy
       redis:
