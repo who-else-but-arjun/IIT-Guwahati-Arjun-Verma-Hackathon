@@ -31,6 +31,32 @@ services:
       timeout: 15s
       retries: 5
 
+  init:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    command: ["sh", "-c", "sh /app/scripts/cleanup-corrupt-models.sh && python -m services.connectors.retriever seed-tickers && python -m scripts.initialize_live_portfolios"]
+    restart: "no"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+      KAGGLEHUB_CACHE: /models
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DATABASE: financial_nlp
+      REDIS_URL: redis://redis:6379/0
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      TOKENIZERS_PARALLELISM: "false"
+    volumes:
+      - ./src/backend:/app
+      - model_store:/models
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   backend:
     build:
       context: .
@@ -51,6 +77,8 @@ services:
       - ./src/backend:/app
       - model_store:/models
     depends_on:
+      init:
+        condition: service_completed_successfully
       mongo:
         condition: service_healthy
       trading:
@@ -77,6 +105,8 @@ services:
     volumes:
       - ./src/backend:/app
     depends_on:
+      init:
+        condition: service_completed_successfully
       mongo:
         condition: service_healthy
       redis:

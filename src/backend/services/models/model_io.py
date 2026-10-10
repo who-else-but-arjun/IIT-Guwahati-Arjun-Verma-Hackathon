@@ -78,6 +78,60 @@ def save_selected_models(*, classification_model, classification_tokenizer,
     return output_root
 
 
+_WEIGHT_PATTERNS = ("model.safetensors", "pytorch_model.bin", "tf_model.h5",
+                    "model.ckpt.index", "flax_model.msgpack", "model_state.pt", "head.pt")
+_ENCODER_WEIGHT_PATTERNS = ("model.safetensors", "pytorch_model.bin", "tf_model.h5",
+                            "model.ckpt.index", "flax_model.msgpack")
+
+
+def _find_weight_files(directory: Path) -> list[Path]:
+    """Return any recognized weight files inside *directory* (recursive)."""
+    return [p for pattern in _WEIGHT_PATTERNS
+            for p in directory.rglob(pattern)]
+
+
+def _has_encoder_weights(model_dir: Path) -> bool:
+    """Check whether the *encoder* subdirectory of *model_dir* has weights.
+
+    For ``encoder_plus_head`` / ``cosine_embedding`` backends the Kaggle
+    cache may include only ``config.json`` and ``head.pt`` while the base
+    encoder weights are expected to come from Hugging Face.
+    """
+    encoder_dir = model_dir / "encoder"
+    if not encoder_dir.is_dir():
+        return False
+    return any(encoder_dir.rglob(pattern) for pattern in _ENCODER_WEIGHT_PATTERNS)
+
+
+def _verify_model_weights(kagglehub, handle: str, model_dir: Path) -> Path:
+    """Ensure *model_dir* has the weight files kagglehub promised.
+
+    kagglehub can mark a download as ``.complete`` while omitting large
+    weight files (e.g. after a checksum mismatch).  When that happens we
+    wipe the stale cache and re-download so transformers can find the
+    encoder weights.
+    """
+    weight_files = _find_weight_files(model_dir)
+    if weight_files:
+        return model_dir
+    import shutil
+    import logging
+    logging.warning("Model cache at %s is missing weight files; re-downloading.", model_dir)
+    shutil.rmtree(model_dir, ignore_errors=True)
+    for attempt in range(2):
+        try:
+            fresh_dir = Path(kagglehub.model_download(handle))
+        except Exception:
+            if attempt == 1:
+                raise
+            continue
+        if _find_weight_files(fresh_dir):
+            return fresh_dir
+    raise FileNotFoundError(
+        f"Model {handle!r} was re-downloaded but still has no weight files in {model_dir}."
+    )
+
+
 def load_model(model_key, *, device=None):
     """Download and load a published model from Kaggle Models.
 
@@ -96,6 +150,7 @@ def load_model(model_key, *, device=None):
     except ImportError as exc:
         raise ImportError("Install kagglehub to load the published model: pip install kagglehub") from exc
     model_dir = Path(kagglehub.model_download(handle))
+    _verify_model_weights(kagglehub, handle, model_dir)
     device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
     config_path = model_dir / "config.json"
     if not config_path.exists() and (model_dir / "model_config.json").exists():
@@ -106,7 +161,9 @@ def load_model(model_key, *, device=None):
         config = json.loads(selector_config_path.read_text(encoding="utf-8"))
         if config.get("backend") != "cosine_embedding":
             raise ValueError(f"Unsupported ticker-selector backend in {selector_config_path}")
-        model = AutoModel.from_pretrained(model_dir / "encoder")
+        encoder_name = str(model_dir / "encoder") if _has_encoder_weights(model_dir) \
+            else config.get("model_id", FLANG_ROBERTA)
+        model = AutoModel.from_pretrained(encoder_name)
         model.to(device).eval()
         model.tokenizer = AutoTokenizer.from_pretrained(model_dir / "tokenizer", use_fast=True)
         model.task_config = config
@@ -128,8 +185,8 @@ def load_model(model_key, *, device=None):
     if backend not in {"composite_transformer", "encoder_plus_head"}:
         raise ValueError(f"Unsupported backend in {config_path}")
     model_name = config.get("model_name", config.get("model_id", FLANG_ROBERTA))
-    if backend == "encoder_plus_head":
-        model_name = str(model_dir / "encoder")
+    if backend == "encoder_plus_head" and not _has_encoder_weights(model_dir):
+        model_name = config.get("model_id", FLANG_ROBERTA)
     common = dict(model_name=model_name, dropout=config.get("dropout", 0.2),
                   head_hidden_sizes=tuple(config.get("head_hidden_sizes", [config.get("head_hidden_size", 256)])))
     if config["task"] == "classification":

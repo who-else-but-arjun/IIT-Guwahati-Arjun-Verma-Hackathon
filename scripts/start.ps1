@@ -1,6 +1,6 @@
 param(
     [switch]$NoBuild,
-    [int]$HealthTimeoutSeconds = 120
+    [int]$HealthTimeoutSeconds = 600
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,8 +12,7 @@ try {
     & docker @composeArgs
     if ($LASTEXITCODE -ne 0) { throw "docker compose up failed with exit code $LASTEXITCODE" }
 
-    & docker compose exec -T backend python -m services.connectors.retriever seed-tickers
-    if ($LASTEXITCODE -ne 0) { throw "S&P 100 ticker seeding failed with exit code $LASTEXITCODE" }
+    Write-Host "Waiting for init service to seed tickers and initialize portfolios..."
 
     $deadline = (Get-Date).AddSeconds($HealthTimeoutSeconds)
     do {

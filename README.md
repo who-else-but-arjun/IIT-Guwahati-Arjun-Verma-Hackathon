@@ -79,7 +79,20 @@ The benchmark files are under `data/benchmarks/`. Install Git LFS and run `git l
 
    On Windows, you can also run `.\scripts\start.ps1` in PowerShell.
 
+   **First-run initialization:** When the stack starts, an `init` service runs automatically before the backend, trading, and news services. It performs three steps in sequence:
+   1. **Cleans up corrupted model caches** — removes any incomplete KaggleHub model downloads from the shared `model_store` volume (see `src/backend/scripts/cleanup-corrupt-models.sh`). This ensures models re-download fresh if a previous download was interrupted.
+   2. **Seeds tickers** — ensures all 101 S&P 100 companies have a MongoDB document.
+   3. **Initializes comparison portfolios** — runs `scripts/initialize_live_portfolios.py`, which replays a 5-year backtest from the seed data, creates the "Normal Rebalancing" and "News + Normal Rebalancing" paper portfolios, fetches and analyzes historical news, and replays the final month for both portfolios.
+
+   **This first-run initialization typically takes 5–10 minutes** because it must download FLANG-RoBERTa model weights from KaggleHub (~500 MB per model), fetch 5 years of price data from Yahoo Finance, and run the backtest simulation. The backend and trading API will not become healthy until the init service completes successfully. You can monitor progress with:
+
+   ```bash
+   docker compose logs -f init
+   ```
+
    **macOS setup:** Install Docker Desktop for Mac, open it, and wait until Docker reports that the engine is running. Then open Terminal, run the clone commands above, and start the stack with `docker compose up --build -d`. No `.env` file is required. Open <http://localhost:5173> when the containers are ready. To stop the app, run `docker compose down` from the repository folder.
+
+   If the init service fails (e.g., KaggleHub is unreachable or rate-limits model downloads), delete the `model_store` volume and retry: `docker compose down -v && docker compose up --build -d`. Note this also clears the Mongo and Redis data volumes, so MongoDB will restore the seed archive on the next start.
 
 4. Open the dashboard at <http://localhost:5173>. The news API is at <http://localhost:8000>; the trading API is at <http://localhost:8001/api/trading/>. The included seed archive is restored automatically when MongoDB initializes a new empty data volume.
 
