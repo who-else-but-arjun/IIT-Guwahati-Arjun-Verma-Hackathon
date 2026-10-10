@@ -79,12 +79,14 @@ The benchmark files are under `data/benchmarks/`. Install Git LFS and run `git l
 
    On Windows, you can also run `.\scripts\start.ps1` in PowerShell.
 
+   > **Note:** The first `--build` takes 3–5 minutes — it downloads the Python base image, installs PyTorch CPU wheels (~200 MB), and installs remaining dependencies. No internet is needed afterward unless Dockerfile or requirements.txt change.
+
    **First-run initialization:** When the stack starts, an `init` service runs automatically before the backend, trading, and news services. It performs three steps in sequence:
    1. **Cleans up corrupted model caches** — removes any incomplete KaggleHub model downloads from the shared `model_store` volume (see `src/backend/scripts/cleanup-corrupt-models.sh`). This ensures models re-download fresh if a previous download was interrupted.
    2. **Seeds tickers** — ensures all 101 S&P 100 companies have a MongoDB document.
    3. **Initializes comparison portfolios** — runs `scripts/initialize_live_portfolios.py`, which replays a 5-year backtest from the seed data, creates the "Normal Rebalancing" and "News + Normal Rebalancing" paper portfolios, fetches and analyzes historical news, and replays the final month for both portfolios.
 
-   **This first-run initialization typically takes 5–10 minutes** because it must download FLANG-RoBERTa model weights from KaggleHub (~500 MB per model), fetch 5 years of price data from Yahoo Finance, and run the backtest simulation. The backend and trading API will not become healthy until the init service completes successfully. You can monitor progress with:
+   **This first-run initialization typically takes 15–30 minutes** because it must download FLANG-RoBERTa model weights from KaggleHub (~500 MB per model), fetch 5 years of price data from Yahoo Finance, and run the backtest simulation. When `OPENCODE_API_KEY` is not set, Jev is unavailable and each of the 300 historical news events must be analyzed with FLANG-Laya, which can extend the first-run to 2–4 hours. The backend and trading API will not become healthy until the init service completes successfully. You can monitor progress with:
 
    ```bash
    docker compose logs -f init
