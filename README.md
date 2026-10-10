@@ -11,7 +11,7 @@
 
 Financial news arrives from multiple sources (Yahoo finance, Finnub, Alpaca news, Bluesky), refers to companies in inconsistent ways, and can affect investment decisions differently depending on the news category and portfolio context. The project demonstrates an end-to-end workflow that collects news relevant to S&P 100 companies, associates articles with candidate tickers, analyzes financial sentiment and impact, and presents the results alongside simulated portfolio activity.
 
-The system combines task-specific FLANG-RoBERTa models with Decision LLMs like Jev and Open source model ![Laya](https://github.com/NandhaKishorM/laya) for flexible category, impact, and regression analysis. Incoming articles are queued for analysis and an analysis worker keeps processing queued articles. An interactive React dashboard exposes analyzed news, ticker information, portfolio activity, and paper-trading results via two API endpoints exposed by the NLP Engine.
+The system combines task-specific FLANG-RoBERTa models with Decision LLMs like Jev and Open source model [Laya](https://github.com/NandhaKishorM/laya) for flexible category, impact, and regression analysis. Incoming articles are queued for analysis and an analysis worker keeps processing queued articles. An interactive React dashboard exposes analyzed news, ticker information, portfolio activity, and paper-trading results via two API endpoints exposed by the NLP Engine.
 
 ## 2. Architecture & Tech Stack
 
@@ -36,7 +36,7 @@ The MongoDB documents used by the application are illustrated below.
 - **Frontend:** React 18, Vite 5, JavaScript.
 - **Backend:** Python 3.11, Django 5.1, Gunicorn, Django REST endpoints.
 - **Data and cache:** MongoDB 7 for news, tickers, and paper-trading state; Redis 7 for caching.
-- **Analysis:** PyTorch, Hugging Face Transformers, FLANG-RoBERTa, FLANG-Laya, KaggleHub for storing models, and optional Jev API access.
+- **Analysis:** PyTorch, Hugging Face Transformers, FLANG-RoBERTa, FLANG-Laya, KaggleHub for storing models (https://www.kaggle.com/arjunverma14142/models), and optional Jev API access.
 - **News and market data:** [Finnhub](https://finnhub.io/dashboard), [Alpaca News](https://app.alpaca.markets/), [Bluesky](https://bsky.app/), and [Yahoo Finance](https://finance.yahoo.com/).
 - **Runtime and deployment:** Docker Compose. Production uses Caddy for HTTPS and Cloudflare Pages for the frontend, Oracle Cloud (Free Tier) for VM/Backend.
 
