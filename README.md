@@ -65,8 +65,8 @@ The benchmark files are under `data/benchmarks/`. Install Git LFS and run `git l
 1. Clone the repository and enter its folder:
 
    ```bash
-   git clone https://github.com/who-else-but-arjun/crisil-financial-nlp.git
-   cd crisil-financial-nlp
+   git clone https://github.com/who-else-but-arjun/IIT-Guwahati-Arjun-Verma-Hackathon.git
+   cd IIT-Guwahati-Arjun-Verma-Hackathon
    ```
 
 2. No `.env` file is required to reproduce the local demo. Finnhub and Alpaca credentials are configured in `src/backend/constants.py`. Jev analysis is optional: without `OPENCODE_API_KEY`, the processor uses FLANG-Laya for category and impact feedback. Get key here https://opencode.ai/console/ - Jev-1.13-free is free to use.
