@@ -51,7 +51,9 @@ class NewsProcessingWorkflow:
                     category, impact_score = self.models.classify_category_and_impact(article_text)
                     logger.warning("Jev unavailable for event %s (%s); category and impact came from FLANG-Laya.", event_id, type(exc).__name__)
                 sentiment_tag, sentiment_score = self.models.analyze_sentiment(article_text)
-                candidates = self.models.select_and_score_tickers(article_text)
+                candidates = self.models.select_and_score_tickers(
+                    article_text, headline=event.headline, article_body=event.text,
+                )
                 relevant_tickers = [
                     RelevantTickerDTO(
                         ticker_id=candidate.ticker_id,

@@ -148,11 +148,14 @@ class FinancialNewsModelSuite:
             raise ValueError(f"FLANG-Laya returned an invalid Bluesky finance decision: {choice!r}.")
         return normalized == "yes"
 
-    def select_and_score_tickers(self, article_text: str) -> list[ScoredTickerCandidate]:
+    def select_and_score_tickers(self, article_text: str, *, headline: str | None = None,
+                                 article_body: str | None = None) -> list[ScoredTickerCandidate]:
         self.ensure_loaded()
         selector = self._models["stock_selector"]
         shortlisted = infer_stock_candidates(
             selector, article_text,
+            headline=headline,
+            article_body=article_body,
             top_k=STOCK_SELECTOR_TOP_K,
         )
         if not shortlisted:

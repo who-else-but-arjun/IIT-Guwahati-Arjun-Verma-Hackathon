@@ -216,8 +216,10 @@ def infer_laya(agent, states, question, *, batch_size=8):
 
 
 @torch.inference_mode()
-def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> list[dict[str, float | str | bool]]:
-    """Shortlist stocks by fusing FLANG embedding similarity and BM25 entity terms."""
+def infer_stock_candidates(model, text: str, *, headline: str | None = None,
+                           article_body: str | None = None,
+                           top_k: int | None = None) -> list[dict[str, float | str | bool]]:
+    """Shortlist stocks with FLANG similarity plus keyword matches in title/body."""
     tokenizer = getattr(model, "tokenizer", None)
     config = getattr(model, "task_config", None)
     if tokenizer is None or config is None or config.get("backend") != "cosine_embedding":
@@ -239,8 +241,20 @@ def infer_stock_candidates(model, text: str, *, top_k: int | None = None) -> lis
     temperature = max(float(config.get("temperature", STOCK_SELECTOR_TEMPERATURE)), 1e-4)
     relevance = torch.sigmoid(cosine / temperature)
     embedding_order = torch.argsort(cosine, descending=True).tolist()
-    keyword_scores = _bm25_company_scores(text, symbols)
-    exact_company_matches = _exact_company_name_matches(text, symbols)
+    # Keep the headline and body as separate lexical fields. A company named
+    # directly in the headline is a stronger signal than a passing body mention.
+    # The combined text remains the fallback for callers that only have one field.
+    if headline is None and article_body is None:
+        keyword_scores = _bm25_company_scores(text, symbols)
+        exact_company_matches = _exact_company_name_matches(text, symbols)
+    else:
+        title_scores = _bm25_company_scores(headline or "", symbols)
+        body_scores = _bm25_company_scores(article_body or "", symbols)
+        keyword_scores = [1.5 * title + body for title, body in zip(title_scores, body_scores)]
+        exact_company_matches = (
+            _exact_company_name_matches(headline or "", symbols)
+            | _exact_company_name_matches(article_body or "", symbols)
+        )
     keyword_order = sorted(
         (index for index, score in enumerate(keyword_scores) if score > 0),
         key=lambda index: keyword_scores[index], reverse=True,
