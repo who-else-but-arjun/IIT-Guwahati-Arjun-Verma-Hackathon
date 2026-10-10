@@ -1,5 +1,3 @@
-# CRISIL Financial NLP: S&P 100 News Intelligence and Paper Trading
-
 ## S&P Global & Crisil Campus Hackathon
 
 - **Candidate Name:** Arjun Verma
@@ -11,9 +9,9 @@
 
 ## 1. Project Overview / Problem Statement & Approach
 
-Financial news arrives from multiple sources, refers to companies in inconsistent ways, and can affect investment decisions differently depending on the news category and portfolio context. The project demonstrates an end-to-end workflow that collects news relevant to S&P 100 companies, associates articles with candidate tickers, analyzes financial sentiment and impact, and presents the results alongside simulated portfolio activity.
+Financial news arrives from multiple sources (Yahoo finance, Finnub, Alpaca news, Bluesky), refers to companies in inconsistent ways, and can affect investment decisions differently depending on the news category and portfolio context. The project demonstrates an end-to-end workflow that collects news relevant to S&P 100 companies, associates articles with candidate tickers, analyzes financial sentiment and impact, and presents the results alongside simulated portfolio activity.
 
-The system combines task-specific FLANG-RoBERTa models with Jev for flexible category, impact, and regression analysis. When Jev is unavailable, the locally loaded FLANG-Laya model provides fallback category and impact decisions. Incoming articles are saved before analysis and remain in a persistent retry queue if analysis cannot complete. An analysis worker keeps retrying pending articles. An interactive React dashboard exposes analyzed news, ticker information, portfolio activity, and paper-trading results. Trading is simulated; the application does not connect to a brokerage or place real orders.
+The system combines task-specific FLANG-RoBERTa models with Decision LLMs like Jev and Open source model ![Laya](https://github.com/NandhaKishorM/laya) for flexible category, impact, and regression analysis. Incoming articles are queued for analysis and an analysis worker keeps processing queued articles. An interactive React dashboard exposes analyzed news, ticker information, portfolio activity, and paper-trading results via two API endpoints exposed by the NLP Engine.
 
 ## 2. Architecture & Tech Stack
 
@@ -38,15 +36,15 @@ The MongoDB documents used by the application are illustrated below.
 - **Frontend:** React 18, Vite 5, JavaScript.
 - **Backend:** Python 3.11, Django 5.1, Gunicorn, Django REST endpoints.
 - **Data and cache:** MongoDB 7 for news, tickers, and paper-trading state; Redis 7 for caching.
-- **Analysis:** PyTorch, Hugging Face Transformers, FLANG-RoBERTa, FLANG-Laya, KaggleHub, and optional Jev API access.
-- **News and market data:** Finnhub, Alpaca news, Bluesky, and Yahoo Finance.
-- **Runtime and deployment:** Docker Compose. Production uses Caddy for HTTPS and Cloudflare Pages for the frontend.
+- **Analysis:** PyTorch, Hugging Face Transformers, FLANG-RoBERTa, FLANG-Laya, KaggleHub for storing models, and optional Jev API access.
+- **News and market data:** ![Finnhub](https://finnhub.io/dashboard), ![Alpaca news](https://app.alpaca.markets/), ![Bluesky](https://bsky.app/), and ![Yahoo Finance](https://finance.yahoo.com/).
+- **Runtime and deployment:** Docker Compose. Production uses Caddy for HTTPS and Cloudflare Pages for the frontend, Oracle Cloud (Free Tier) for VM/Backend.
 
 ## 3. Dataset Used
 
-The live prototype can ingest public financial news from Finnhub and Alpaca, as well as posts from Bluesky. The repository also contains a MongoDB seed archive with example news, ticker records, and paper-portfolio history so a fresh local deployment starts with populated dashboard data. Data availability and fields depend on the upstream provider.
+The live prototype can ingest public financial news from Finnhub, Yahoo, Alpaca, as well as posts from Bluesky. Finance related news from Bluesky are filtered using Laya. The repository also contains a MongoDB seed archive with example news, ticker records, and paper-portfolio history so a fresh local deployment starts with populated dashboard data. Data availability and fields depend on the upstream provider.
 
-For model experiments, the notebooks use these publicly available benchmark datasets:
+For model experiments and fine-tuning regression and classifications heads and Laya, the notebooks use these publicly available benchmark datasets:
 
 | Dataset | Approximate rows | Task |
 |---|---:|---|
@@ -55,7 +53,7 @@ For model experiments, the notebooks use these publicly available benchmark data
 | Twitter Financial News Sentiment | 11,931 | Financial sentiment classification |
 | Financial News ticker/entity linking | 70,974 | Multi-label ticker association |
 
-The benchmark files are under `data/benchmarks/` and tracked with Git LFS. Install Git LFS and run `git lfs pull` if you need the full files for notebook work; the website does not need them. PhraseBank files are overlapping subsets and should not be combined in one evaluation. Dataset labels are source annotations and may not be independently adjudicated. Reuse conditions vary: PhraseBank declares CC BY-NC-SA 3.0, while FiQA and the ticker-linking source do not state a clear reuse license in their source materials. Check each source's terms before redistribution or commercial use. See [`data/README.md`](data/README.md) for details.
+The benchmark files are under `data/benchmarks/`. Install Git LFS and run `git lfs pull` if you need the full files for notebook work; the website does not need them. PhraseBank files are overlapping subsets and should not be combined in one evaluation. Dataset labels are source annotations and may not be independently adjudicated. See [`data/README.md`](data/README.md) for details.
 
 ## 4. Quickstart & Installation
 
@@ -96,7 +94,7 @@ The benchmark files are under `data/benchmarks/` and tracked with Git LFS. Insta
 
 ### Model and provider notes
 
-Full analysis requires the published model artifacts to be reachable through KaggleHub and successfully loaded. If model artifacts are unavailable, articles are saved and the worker retries them; successful analysis is delayed until the models can load. External news feeds and market prices also depend on provider access and network availability. The seeded database allows the dashboard to show example data without waiting for new provider articles.
+Full analysis requires the published model artifacts to be reachable through KaggleHub and successfully loaded. Models were fine-tuned and uplaoded to KaggleHub with Public access. During runtime the Virtual Machine loads these models once. External news feeds and market prices also depend on provider access and network availability. The seeded database (not synthetic) allows the dashboard to show example data without waiting for new provider articles.
 
 ### Production deployment
 
@@ -122,15 +120,13 @@ MongoDB restores the seed archive only when it initializes a new empty data volu
 
 ## 5. Key Results & Domain Impact
 
-The prototype demonstrates a complete path from incoming financial news to ticker-aware analysis, a browsable dashboard, and simulated portfolio responses. Persisting articles before analysis prevents temporary model or provider failures from silently discarding news; the worker retries pending items when processing becomes available. The paper-trading engine demonstrates how analyzed news can be connected to portfolio state without placing real trades.
+The prototype demonstrates a complete path from incoming financial news to ticker-aware analysis, a browsable dashboard, and simulated portfolio responses. Persisting articles in a queue before analysis prevents temporary model or provider failures from silently discarding news; the worker retries pending items in queue when processing becomes available. The paper-trading engine demonstrates how analyzed news can be connected to portfolio state without placing real trades.
 
 Saved notebook evaluations report the following results. These are offline benchmark results; they do not represent live production accuracy, and runs with different sample sizes or methods should not be compared as a controlled head-to-head test.
 
-- **Sentiment classification:** FLANG-RoBERTa reached macro-F1 **0.8427** on the PhraseBank test subset (485 rows) and **0.8675** on Twitter Financial News Sentiment (2,388 rows).
-- **Sentiment regression:** FLANG-RoBERTa reached MAE **0.1848** and RMSE **0.2628** on the FiQA test set (150 rows). Jev was selected for the flexible regression path; its separate 60-row zero-shot evaluation is not directly comparable.
-- **Ticker association:** the hybrid FLANG-RoBERTa candidate-ranking plus Jev relevance-scoring experiment reached micro-F1 **0.5974** on 50 test articles. The small sample and lower macro-F1 mean ticker suggestions should be treated as scored candidates, not certain labels.
-
 The business value is a reviewable prototype for organizing financial news by company and sentiment, surfacing candidate ticker relevance, and exploring possible portfolio effects using simulated trades. Human review and broader, consistently split evaluation are needed before using the outputs for investment decisions.
+
+<img width="1879" height="720" alt="Results" src="https://github.com/user-attachments/assets/d830071c-19ca-4881-951a-eaf074c56103" />
 
 ---
 
