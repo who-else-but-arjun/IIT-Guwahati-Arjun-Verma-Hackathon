@@ -3,7 +3,7 @@
 - **Candidate Name:** Arjun Verma
 - **College Email ID:** arjun.verma@iitg.ac.in
 - **College / Campus:** IIT Guwahati
-- **Demo Video Link:** [YouTube / Unlisted]
+- **Demo Video Link:** https://youtu.be/BUGOn1c1ShQ
 - **Website Link:** https://crisil-financial-nlp.pages.dev/news (live until 6th Nov)
 - **Slide Deck Link (if hosted externally):** [presentation.pdf](https://drive.google.com/file/d/1nbPnODLzC-eAg-KrWiNoPMgi9IRhVkFS/view?usp=sharing)
 
